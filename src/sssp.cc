@@ -30,12 +30,10 @@
 using namespace std;
 using namespace bucketing;
 
-const WeightT kDistInf = numeric_limits<WeightT>::max() / 2;
-
-using Distances = parallel::atomics_array<WeightT>;
+static constexpr WeightT DIST_INF = numeric_limits<WeightT>::max() / 2;
 
 template <bool logging = false>
-Distances DeltaStep(const WGraph& g, NodeID source, WeightT delta) {
+parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32_t delta) {
 #ifdef PAPI_PROFILE
   PAPI_hl_region_begin("sssp-ws");
 #endif
@@ -44,8 +42,12 @@ Distances DeltaStep(const WGraph& g, NodeID source, WeightT delta) {
 
   internal_execution_timer.Start();
 
-  Distances dist(g.num_nodes(), kDistInf);
+  parallel::atomics_array<WeightT> dist(g.num_nodes(), DIST_INF);
   dist[source] = 0;
+
+  auto cond = [&](NodeID u, bucket_index i) -> bool {
+    return dist[u].load(std::memory_order_relaxed) >= delta * i;
+  };
 
   auto relax_edge = [&](NodeID u, WNode wv) -> std::optional<WeightT> {
     WeightT old_dist = dist[wv.v].load(std::memory_order_acquire);
@@ -58,7 +60,7 @@ Distances DeltaStep(const WGraph& g, NodeID source, WeightT delta) {
     return std::nullopt;
   };
 
-  bucketing::executor bucketing(g, dist, delta, relax_edge);
+  bucketing::executor bucketing(g, delta, cond, relax_edge);
 
   internal_execution_timer.Stop();
   cout << "Allocation time: " << internal_execution_timer.Seconds() << endl;
@@ -77,46 +79,49 @@ Distances DeltaStep(const WGraph& g, NodeID source, WeightT delta) {
   return dist;
 }
 
-void PrintSSSPStats(const WGraph& g, const Distances& dist) {
-  auto NotInf = [](const std::atomic<WeightT>& d) { return d != kDistInf; };
+void PrintSSSPStats(const WGraph& g, const parallel::atomics_array<WeightT>& dist) {
+  auto NotInf = [](const std::atomic<WeightT>& d) { return d != DIST_INF; };
   int64_t num_reached = std::count_if(dist.begin(), dist.end(), NotInf);
   cout << "SSSP Tree reaches " << num_reached << " nodes" << endl;
 
   WeightT max_dist = 0;
   for (auto i = 0; i < g.num_nodes(); i++)
-    if (dist[i] != kDistInf && dist[i] > max_dist)
+    if (dist[i] != DIST_INF && dist[i] > max_dist)
       max_dist = dist[i];
 
   cout << "Max dist " << max_dist << endl;
 }
 
-// Compares against simple serial implementation
-bool SSSPVerifier(const WGraph& g, NodeID source, const Distances& dist_to_test) {
-  // Serial Dijkstra implementation to get oracle distances
-  Distances oracle_dist(g.num_nodes(), kDistInf);
-  oracle_dist[source] = 0;
+bool SSSPVerifier(const WGraph& g, NodeID source, const parallel::atomics_array<WeightT>& dist_to_test) {
+  parallel::atomics_array<WeightT> dist(g.num_nodes(), DIST_INF);
+  vector<bool> settled(g.num_nodes());
+  dist[source] = 0;
+
   typedef pair<WeightT, NodeID> WN;
   priority_queue<WN, vector<WN>, greater<WN>> mq;
   mq.push(make_pair(0, source));
+
   while (!mq.empty()) {
-    WeightT td = mq.top().first;
+    WeightT tentative_dist = mq.top().first;
     NodeID u = mq.top().second;
     mq.pop();
-    if (td == oracle_dist[u]) {
-      for (WNode wn : g.out_neigh(u)) {
-        if (td + wn.w < oracle_dist[wn.v]) {
-          oracle_dist[wn.v] = td + wn.w;
-          mq.push(make_pair(td + wn.w, wn.v));
+    settled[u] = true;
+
+    for (WNode wn : g.out_neigh(u)) {
+      if (!settled[wn.v])
+        if (tentative_dist + wn.w < dist[wn.v]) {
+          dist[wn.v] = tentative_dist + wn.w;
+          mq.push(make_pair(tentative_dist + wn.w, wn.v));
         }
-      }
     }
   }
+
   // Report any mismatches
   bool all_ok = true;
   for (NodeID n : g.vertices()) {
-    if (dist_to_test[n] != oracle_dist[n]) {
-      // if (dist_to_test[n] != kDistInf)
-      //   cout << n << ": " << dist_to_test[n] << " != " << oracle_dist[n] << endl;
+    if (dist_to_test[n] != dist[n]) {
+      // if (dist_to_test[n] != DIST_INF)
+      //   cout << n << ": " << dist_to_test[n] << " != " << dist[n] << endl;
       all_ok = false;
     }
   }
@@ -154,7 +159,7 @@ int main(int argc, char* argv[]) {
       min_in = std::min(min_in, g.in_degree(i));
   }
 
-  WeightT min = kDistInf;
+  WeightT min = DIST_INF;
   WeightT max = 0;
   for (auto i = 0; i < g.num_nodes(); i++) {
     for (WNode wn : g.out_neigh(i)) {
@@ -184,7 +189,7 @@ int main(int argc, char* argv[]) {
   };
 
   SourcePicker<WGraph> vsp(g, cli);
-  auto VerifierBound = [&vsp](const WGraph& g, const Distances& dist) {
+  auto VerifierBound = [&vsp](const WGraph& g, const parallel::atomics_array<WeightT>& dist) {
     return SSSPVerifier(g, vsp.PickNext(), dist);
   };
 

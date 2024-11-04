@@ -9,7 +9,9 @@
 
 #include "omp.h"
 
+#include "../containers/static_buffer.h"
 #include "../parallel/atomics_array.h"
+#include "../parallel/pparray.h"
 #include "../timer.h"
 #include "benchmark.h"
 #include "frontier.h"
@@ -18,21 +20,21 @@
   for (WNode wn : g_.out_neigh((node)))              \
     if (auto new_prio = edge_operation_((node), wn)) \
       if (!(leaf)[wn.v])                             \
-        (frontier).push(wn.v, *new_prio / delta_);
+        (frontier).push(wn.v, *new_prio / coarsening_);
 
 namespace bucketing {
 
-template <typename Graph, typename PriorityT, typename EdgeOpT>
+template <typename Graph, typename CondOpT, typename EdgeOpT>
 class executor {
 public:
-  executor(const Graph& g, parallel::atomics_array<PriorityT>& priorities, int delta, EdgeOpT& edge_operation)
+  executor(const Graph& g, std::int32_t coarsening, CondOpT& cond_operation, EdgeOpT& edge_operation)
       : num_threads_(omp_get_max_threads()),
         g_(g),
-        priorities_(priorities),
-        delta_(delta),
+        coarsening_(coarsening),
+        cond_operation_(cond_operation),
         edge_operation_(edge_operation),
         frontiers_(num_threads_),
-        leaf_(g_.num_nodes()) {}
+        is_leaf_(g_.num_nodes()) {}
 
   void run(NodeID source) {
     frontiers_[starting_thread_].push(source, 0);
@@ -40,12 +42,12 @@ public:
 #pragma omp parallel for schedule(static)
     for (NodeID node = 0; node < g_.num_nodes(); node++) {
       if (g_.in_degree(node) == 1 && g_.out_degree(node) == 0)
-        leaf_[node] = true;
+        is_leaf_[node] = true;
       else if ((g_.in_degree(node) == 1 && g_.out_degree(node) == 1)) {
-        NodeID in_src = g_.in_index()[node][0].v;
-        NodeID out_dst = g_.out_index()[node][0].v;
+        NodeID in_src = (NodeID)g_.in_index()[node][0];
+        NodeID out_dst = (NodeID)g_.out_index()[node][0];
         if (in_src == out_dst)
-          leaf_[node] = true;
+          is_leaf_[node] = true;
       }
     }
 
@@ -53,23 +55,20 @@ public:
     {
       int tid = omp_get_thread_num();
       auto& my_frontier = frontiers_[tid];
+      containers::static_fifo<nodes_chunk*> stolen_chunks(num_threads_);
 
       while (true) {
 
         // Using do-while so non-starting threads will try to steal first
         do {
           // Process current bucket
-          if (!my_frontier.current_empty()) {
-            for (auto node_pair = my_frontier.pop(); node_pair; node_pair = my_frontier.pop()) {
-              auto [u, bucket] = node_pair.value();
-              if (priorities_[u].load(std::memory_order_relaxed) >= delta_ * (bucket))
-                process_node(u, bucket, leaf_, my_frontier);
-            }
+          for (auto node_pair = my_frontier.pop(); node_pair; node_pair = my_frontier.pop()) {
+            auto [u, bucket] = node_pair.value();
+            if (cond_operation_(u, bucket))
+              process_node(u, bucket, is_leaf_, my_frontier);
           }
 
-          // Stealing protocol
-          std::vector<nodes_chunk*> stolen_chunks;
-          stolen_chunks.reserve(num_threads_);
+          stolen_chunks.clear();
 
           auto next_bucket = my_frontier.next_index();
           bucket_index min = next_bucket;
@@ -88,13 +87,13 @@ public:
             my_frontier.set_current(min);
 
             for (auto i = 0; i < stolen_chunks.size(); i++) {
-              auto& chunk = stolen_chunks[i];
+              auto chunk = stolen_chunks.pop_front();
               while (!chunk->empty()) {
                 auto u = chunk->pop_front();
-                if (priorities_[u] >= delta_ * chunk->priority)
-                  process_node(u, chunk->priority, leaf_, my_frontier);
+                if (cond_operation_(u, chunk->priority))
+                  process_node(u, chunk->priority, is_leaf_, my_frontier);
               }
-              delete stolen_chunks[i];
+              delete chunk;
             }
           }
 
@@ -140,11 +139,11 @@ private:
 
   int num_threads_;
   const Graph& g_;
-  parallel::atomics_array<PriorityT>& priorities_;
-  int delta_;
+  int coarsening_;
+  CondOpT& cond_operation_;
   EdgeOpT& edge_operation_;
-  std::vector<frontier<nodes_chunk>> frontiers_;
-  std::vector<bool> leaf_;
+  parallel::padded_array<frontier<nodes_chunk>> frontiers_;
+  std::vector<bool> is_leaf_;
 };
 
 } // namespace bucketing

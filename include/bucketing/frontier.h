@@ -12,6 +12,7 @@
 #include "base.h"
 #include "bucket.h"
 #include "current-bucket.h"
+#include "next_buckets.h"
 
 namespace bucketing {
 
@@ -22,25 +23,13 @@ private:
   using priority_type = typename ChunkT::priority_type;
 
 public:
-  frontier() {
-    next_buckets_.reserve(1024);
-    next_buckets_.resize(128);
-  }
-
   inline void push(value_type value, priority_type priority) {
     if (current_.load(std::memory_order_relaxed) == priority) {
       current_bucket_.push(value, priority);
       return;
     }
 
-    auto current_size = next_buckets_.size();
-    if (priority >= current_size) {
-      while ((current_size <<= 1) <= priority)
-        ;
-      next_buckets_.resize(current_size);
-    }
-
-    next_buckets_[priority].push_value(value, priority);
+    next_buckets_.push(value, priority);
   }
 
   inline std::optional<node_prio> pop() {
@@ -56,23 +45,15 @@ public:
   }
 
   inline bucket_index next_index() {
-    for (auto i = 0; i < next_buckets_.size(); i++) {
-      if (!next_buckets_[i].empty()) {
-        return i;
-      }
-    }
-    return EMPTY_BUCKETS;
+    return next_buckets_.first_nonempty();
   }
 
   bool current_empty() {
-    if (local_chunk_ != nullptr)
-      return false;
-
     return current_bucket_.empty();
   }
 
   void push_from(bucket_index index) {
-    auto& bucket = next_buckets_[index];
+    auto& bucket = next_buckets_.get(index);
 
     while (!bucket.empty())
       current_bucket_.push(bucket.pop_chunk());
@@ -84,9 +65,8 @@ public:
 
 private:
   std::atomic<bucket_index> current_{0};
-  ChunkT* local_chunk_ = nullptr;
   current_bucket<ChunkT> current_bucket_;
-  std::vector<bucket<ChunkT>> next_buckets_;
+  next_buckets<ChunkT> next_buckets_;
 };
 
 }; // namespace bucketing

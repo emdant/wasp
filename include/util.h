@@ -24,6 +24,23 @@ Miscellaneous helpers that don't fit into classes
 #define _SET_HI(v) ((v) | (1 << 31))
 #define _SET_LO(v) ((v) | 1)
 
+#define IS_POW2(x)
+
+bool is_pow2(std::uint32_t x) {
+  return ((x & (x - 1)) == 0);
+}
+
+std::uint32_t next_pow2(std::uint32_t x) {
+  x--;
+  x |= x >> 1;
+  x |= x >> 2;
+  x |= x >> 4;
+  x |= x >> 8;
+  x |= x >> 16;
+  x++;
+  return x;
+}
+
 template <typename T>
 bool test_low_and_clear(T& value) {
   bool temp = (value & 1) != 0;
