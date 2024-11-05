@@ -11,7 +11,7 @@
 
 #include "base.h"
 #include "bucket.h"
-#include "current-bucket.h"
+#include "current_bucket.h"
 #include "next_buckets.h"
 
 namespace bucketing {
