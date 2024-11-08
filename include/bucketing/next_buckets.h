@@ -19,7 +19,7 @@ public:
     buckets_.resize(128);
   }
 
-  bucket<ChunkT>& get(bucket_index index) {
+  current_bucket<ChunkT>& get(bucket_index index) {
     return buckets_[index];
   }
 
@@ -31,7 +31,7 @@ public:
       buckets_.resize(current_size);
     }
 
-    buckets_[index].push_value(node, index);
+    buckets_[index].push(node, index);
   }
 
   bucket_index first_nonempty() {
@@ -44,7 +44,7 @@ public:
   }
 
 private:
-  std::vector<bucket<ChunkT>> buckets_;
+  std::vector<current_bucket<ChunkT>> buckets_;
 };
 
 } // namespace bucketing

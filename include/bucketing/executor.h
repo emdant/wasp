@@ -60,51 +60,47 @@ public:
       while (true) {
 
         // Using do-while so non-starting threads will try to steal first
-        do {
-          // Process current bucket
-          for (auto node_pair = my_frontier.pop(); node_pair; node_pair = my_frontier.pop()) {
-            auto [u, bucket] = node_pair.value();
-            if (cond_operation_(u, bucket))
-              process_node(u, bucket, is_leaf_, my_frontier);
+
+        // Process current bucket
+        for (auto node_pair = my_frontier.pop(); node_pair; node_pair = my_frontier.pop()) {
+          auto [u, bucket] = node_pair.value();
+          if (cond_operation_(u, bucket)) {
+            process_node(u, bucket, is_leaf_, my_frontier);
           }
+        }
 
-          stolen_chunks.clear();
-
-          auto next_bucket = my_frontier.next_index();
-          bucket_index min = next_bucket;
-          for (auto i = (tid + 1) % num_threads_; i != tid; i = (i + 1) % num_threads_) {
-            if (frontiers_[i].current_index() <= next_bucket) {
-              auto chunk = frontiers_[i].steal();
-              if (chunk != nullptr) {
-                min = std::min(min, chunk->priority);
-                stolen_chunks.push_back(chunk);
-              }
-            }
-          }
-
-          // Processing stolen chunks
-          if (!stolen_chunks.empty()) {
-            my_frontier.set_current(min);
-
-            for (auto i = 0; i < stolen_chunks.size(); i++) {
-              auto chunk = stolen_chunks.pop_front();
-              while (!chunk->empty()) {
-                auto u = chunk->pop_front();
-                if (cond_operation_(u, chunk->priority))
-                  process_node(u, chunk->priority, is_leaf_, my_frontier);
-              }
-              delete chunk;
-            }
-          }
-
-        } while (!my_frontier.current_empty());
+        stolen_chunks.clear();
 
         auto next_bucket = my_frontier.next_index();
+        bucket_index min = next_bucket;
+        for (auto i = (tid + 1) % num_threads_; i != tid; i = (i + 1) % num_threads_) {
+          if (frontiers_[i].current_index() <= next_bucket) {
+            auto chunk = frontiers_[i].steal();
+            if (chunk != nullptr) {
+              min = std::min(min, chunk->priority);
+              stolen_chunks.push_back(chunk);
+            }
+          }
+        }
+
+        // Processing stolen chunks
+        if (!stolen_chunks.empty()) {
+
+          for (auto i = 0; i < stolen_chunks.size(); i++) {
+            auto chunk = stolen_chunks.pop_front();
+            while (!chunk->empty()) {
+              auto u = chunk->pop_front();
+              if (cond_operation_(u, chunk->priority))
+                process_node(u, chunk->priority, is_leaf_, my_frontier);
+            }
+            delete chunk;
+          }
+        }
+
+        next_bucket = my_frontier.next_index();
         my_frontier.set_current(next_bucket);
 
-        if (next_bucket != EMPTY_BUCKETS) {
-          my_frontier.push_from(next_bucket);
-        } else {
+        if (next_bucket == EMPTY_BUCKETS) {
           bool all_finished = true;
           for (auto i = 0; i < num_threads_; i++) {
             if (frontiers_[i].current_index() != EMPTY_BUCKETS) {
