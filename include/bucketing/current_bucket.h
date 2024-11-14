@@ -21,9 +21,9 @@ public:
     return deque_.empty();
   }
 
-  void push(NodeID node, bucket_index bucket) {
+  void push(NodeID node, priority_level p) {
     if (local_chunk_ == nullptr) {
-      local_chunk_ = new ChunkT(node, bucket);
+      local_chunk_ = new ChunkT(node, p);
       return;
     }
     local_chunk_->push_back(node);

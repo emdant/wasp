@@ -10,7 +10,7 @@
 #include <string>
 #include <type_traits>
 
-#include "parallel/pvector.h"
+#include "parallel/vector.h"
 #include "util.h"
 
 /*
@@ -29,7 +29,7 @@ Given filename, returns an edgelist or the entire graph (if serialized)
 template <typename NodeID_, typename DestID_ = NodeID_, typename WeightT_ = NodeID_, bool invert = true>
 class Reader {
   typedef EdgePair<NodeID_, DestID_> Edge;
-  typedef pvector<Edge> EdgeList;
+  typedef parallel::vector<Edge> EdgeList;
   std::string filename_;
 
 public:
@@ -279,7 +279,7 @@ public:
     file.read(reinterpret_cast<char*>(&directed), sizeof(bool));
     file.read(reinterpret_cast<char*>(&num_edges), sizeof(SGOffset));
     file.read(reinterpret_cast<char*>(&num_nodes), sizeof(SGOffset));
-    pvector<SGOffset> offsets(num_nodes + 1);
+    parallel::vector<SGOffset> offsets(num_nodes + 1);
     neighs = new DestID_[num_edges];
     std::streamsize num_index_bytes = (num_nodes + 1) * sizeof(SGOffset);
     std::streamsize num_neigh_bytes = num_edges * sizeof(DestID_);

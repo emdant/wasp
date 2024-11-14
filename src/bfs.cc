@@ -22,8 +22,8 @@
 #include "command_line.h"
 #include "graph.h"
 #include "parallel/atomics_array.h"
-#include "parallel/pparray.h"
-#include "parallel/pvector.h"
+#include "parallel/padded_array.h"
+#include "parallel/vector.h"
 #include "platform_atomics.h"
 #include "timer.h"
 
@@ -50,7 +50,7 @@ parallel::atomics_array<bfs_pair> BFS(const Graph& g, NodeID source, int32_t del
   parallel::atomics_array<bfs_pair> parent(g.num_nodes(), {-1, DIST_INF});
   parent[source] = {source, 0};
 
-  auto cond = [&](NodeID u, bucket_index i) -> bool {
+  auto cond = [&](NodeID u, priority_level i) -> bool {
     return parent[u].load(std::memory_order_relaxed).level >= delta * i;
   };
 
@@ -65,7 +65,11 @@ parallel::atomics_array<bfs_pair> BFS(const Graph& g, NodeID source, int32_t del
     return std::nullopt;
   };
 
-  bucketing::executor bucketing(g, delta, cond, visit_edge);
+  auto coarsen = [&](WeightT dist) -> bucketing::priority_level {
+    return dist / delta;
+  };
+
+  bucketing::executor bucketing(g, cond, visit_edge, coarsen);
 
   internal_execution_timer.Stop();
   cout << "Allocation time: " << internal_execution_timer.Seconds() << endl;
@@ -97,7 +101,7 @@ void PrintBFSStats(const Graph& g, parallel::atomics_array<bfs_pair>& bfs_tree) 
 }
 
 bool BFSVerifier(const Graph& g, NodeID source, parallel::atomics_array<bfs_pair>& parent) {
-  pvector<int> depth(g.num_nodes(), -1);
+  parallel::vector<int> depth(g.num_nodes(), -1);
   depth[source] = 0;
   vector<NodeID> to_visit;
   to_visit.reserve(g.num_nodes());

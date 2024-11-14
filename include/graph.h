@@ -10,7 +10,7 @@
 #include <iostream>
 #include <type_traits>
 
-#include "parallel/pvector.h"
+#include "parallel/vector.h"
 #include "util.h"
 
 /*
@@ -241,7 +241,7 @@ public:
     }
   }
 
-  static DestID_** GenIndex(const pvector<SGOffset>& offsets, DestID_* neighs) {
+  static DestID_** GenIndex(const parallel::vector<SGOffset>& offsets, DestID_* neighs) {
     NodeID_ length = offsets.size();
     DestID_** index = new DestID_*[length];
 #pragma omp parallel for
@@ -250,8 +250,8 @@ public:
     return index;
   }
 
-  pvector<SGOffset> VertexOffsets(bool in_graph = false) const {
-    pvector<SGOffset> offsets(num_nodes_ + 1);
+  parallel::vector<SGOffset> VertexOffsets(bool in_graph = false) const {
+    parallel::vector<SGOffset> offsets(num_nodes_ + 1);
     for (NodeID_ n = 0; n < num_nodes_ + 1; n++)
       if (in_graph)
         offsets[n] = in_index_[n] - in_index_[0];

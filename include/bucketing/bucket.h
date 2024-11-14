@@ -12,10 +12,6 @@ namespace bucketing {
 
 template <typename ChunkT>
 class bucket {
-private:
-  using value_type = typename ChunkT::value_type;
-  using priority_type = typename ChunkT::priority_type;
-
 public:
   bucket() {}
   ~bucket() {} // we do not delete the contents because we assume that the pointers have been freed somewhere else
@@ -25,9 +21,9 @@ public:
       : head_(std::exchange(other.head_, nullptr)),
         n_(other.n_) {}
 
-  void push_value(value_type value, priority_type priority) {
+  void push_value(NodeID value, priority_level p) {
     if (head_ == nullptr) {
-      head_ = new ChunkT(value, priority);
+      head_ = new ChunkT(value, p);
       n_++;
       return;
     }
@@ -38,7 +34,7 @@ public:
     }
 
     // Chunk is full
-    auto chunk = new ChunkT(value, priority, head_);
+    auto chunk = new ChunkT(value, p, head_);
     head_ = chunk;
     n_++;
     return;

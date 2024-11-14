@@ -10,28 +10,22 @@
 #include "omp.h"
 
 #include "../parallel/atomics_array.h"
-#include "../parallel/pparray.h"
+#include "../parallel/padded_array.h"
 #include "../timer.h"
 #include "benchmark.h"
 #include "frontier.h"
 
-#define process_node(node, bucket, leaf, frontier)   \
-  for (WNode wn : g_.out_neigh((node)))              \
-    if (auto new_prio = edge_operation_((node), wn)) \
-      if (!(leaf)[wn.v])                             \
-        (frontier).push(wn.v, *new_prio / coarsening_);
-
 namespace bucketing {
 
-template <typename Graph, typename CondOpT, typename EdgeOpT>
+template <typename Graph, typename CondOpT, typename EdgeOpT, typename CoarsenOpT>
 class executor {
 public:
-  executor(const Graph& g, std::int32_t coarsening, CondOpT& cond_operation, EdgeOpT& edge_operation)
+  executor(const Graph& g, CondOpT& cond_operation, EdgeOpT& edge_operation, CoarsenOpT& coarsen_operation)
       : num_threads_(omp_get_max_threads()),
         g_(g),
-        coarsening_(coarsening),
         cond_operation_(cond_operation),
         edge_operation_(edge_operation),
+        coarsen_operation_(coarsen_operation),
         frontiers_(num_threads_),
         is_leaf_(g_.num_nodes()) {}
 
@@ -62,17 +56,22 @@ public:
           // Process current bucket
           for (auto node_pair = my_frontier.pop(); node_pair; node_pair = my_frontier.pop()) {
             auto [u, bucket] = node_pair.value();
-            if (cond_operation_(u, bucket))
-              process_node(u, bucket, is_leaf_, my_frontier);
+            if (cond_operation_(u, bucket)) {
+              for (WNode wn : g_.out_neigh(u)) {
+                if (auto new_prio = edge_operation_(u, wn))
+                  if (!is_leaf_[wn.v])
+                    my_frontier.push(wn.v, coarsen_operation_(*new_prio));
+              }
+            }
           }
 
           std::vector<nodes_chunk*> stolen_chunks;
           stolen_chunks.reserve(num_threads_);
 
-          auto next_bucket = my_frontier.next_index();
-          bucket_index min = next_bucket;
+          auto next_bucket = my_frontier.next_priority_level();
+          priority_level min = next_bucket;
           for (auto i = (tid + 1) % num_threads_; i != tid; i = (i + 1) % num_threads_) {
-            if (frontiers_[i].current_index() <= next_bucket) {
+            if (frontiers_[i].current_priority_level() <= next_bucket) {
               auto chunk = frontiers_[i].steal();
               if (chunk != nullptr) {
                 min = std::min(min, chunk->priority);
@@ -89,8 +88,13 @@ public:
               auto& chunk = stolen_chunks[i];
               while (!chunk->empty()) {
                 auto u = chunk->pop_front();
-                if (cond_operation_(u, chunk->priority))
-                  process_node(u, chunk->priority, is_leaf_, my_frontier);
+                if (cond_operation_(u, chunk->priority)) {
+                  for (WNode wn : g_.out_neigh(u)) {
+                    if (auto new_prio = edge_operation_(u, wn))
+                      if (!is_leaf_[wn.v])
+                        my_frontier.push(wn.v, coarsen_operation_(*new_prio));
+                  }
+                }
               }
               delete chunk;
             }
@@ -98,7 +102,7 @@ public:
 
         } while (!my_frontier.current_empty());
 
-        auto next_bucket = my_frontier.next_index();
+        auto next_bucket = my_frontier.next_priority_level();
         my_frontier.set_current(next_bucket);
 
         if (next_bucket != EMPTY_BUCKETS) {
@@ -106,7 +110,7 @@ public:
         } else {
           bool all_finished = true;
           for (auto i = 0; i < num_threads_; i++) {
-            if (frontiers_[i].current_index() != EMPTY_BUCKETS) {
+            if (frontiers_[i].current_priority_level() != EMPTY_BUCKETS) {
               all_finished = false;
               break;
             }
@@ -119,28 +123,14 @@ public:
     }
   }
 
-  void print_content() {
-    for (auto i = 0; i < num_threads_; i++) {
-      auto& buckets = frontiers_[i];
-      if (!buckets.current_empty() || buckets.next_index() != bucketing::EMPTY_BUCKETS)
-        std::cout << "thread i:" << std::endl;
-
-      if (!buckets.current_empty())
-        std::cout << "\tcurrent bucket not empty" << std::endl;
-
-      if (buckets.next_index() != bucketing::EMPTY_BUCKETS)
-        std::cout << "\tnext bucket not empty" << std::endl;
-    }
-  }
-
 private:
   static constexpr inline int starting_thread_ = 0;
 
   int num_threads_;
   const Graph& g_;
-  int coarsening_;
   CondOpT& cond_operation_;
   EdgeOpT& edge_operation_;
+  CoarsenOpT& coarsen_operation_;
   parallel::padded_array<frontier<nodes_chunk>> frontiers_;
   std::vector<bool> is_leaf_;
 };

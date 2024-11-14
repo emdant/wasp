@@ -22,8 +22,8 @@
 #include "command_line.h"
 #include "graph.h"
 #include "parallel/atomics_array.h"
-#include "parallel/pparray.h"
-#include "parallel/pvector.h"
+#include "parallel/padded_array.h"
+#include "parallel/vector.h"
 #include "platform_atomics.h"
 #include "timer.h"
 
@@ -45,7 +45,7 @@ parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32
   parallel::atomics_array<WeightT> dist(g.num_nodes(), DIST_INF);
   dist[source] = 0;
 
-  auto cond = [&](NodeID u, bucket_index i) -> bool {
+  auto cond = [&](NodeID u, priority_level i) -> bool {
     return dist[u].load(std::memory_order_relaxed) >= delta * i;
   };
 
@@ -60,7 +60,11 @@ parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32
     return std::nullopt;
   };
 
-  bucketing::executor bucketing(g, delta, cond, relax_edge);
+  auto coarsen = [&](WeightT dist) -> bucketing::priority_level {
+    return dist / delta;
+  };
+
+  bucketing::executor bucketing(g, cond, relax_edge, coarsen);
 
   internal_execution_timer.Stop();
   cout << "Allocation time: " << internal_execution_timer.Seconds() << endl;
@@ -143,40 +147,6 @@ int main(int argc, char* argv[]) {
   WeightedBuilder b(cli);
   WGraph g = b.MakeGraph();
   SourcePicker<WGraph> sp(g, cli);
-
-  auto max_out = g.out_degree(0);
-  auto max_in = g.in_degree(0);
-  auto min_out = numeric_limits<int64_t>::max();
-  auto min_in = numeric_limits<int64_t>::max();
-
-  for (auto i = 1; i < g.num_nodes(); i++) {
-    max_out = std::max(max_out, g.out_degree(i));
-    max_in = std::max(max_in, g.in_degree(i));
-
-    if (g.out_degree(i) != 0)
-      min_out = std::min(min_out, g.out_degree(i));
-    if (g.in_degree(i) != 0)
-      min_in = std::min(min_in, g.in_degree(i));
-  }
-
-  WeightT min = DIST_INF;
-  WeightT max = 0;
-  for (auto i = 0; i < g.num_nodes(); i++) {
-    for (WNode wn : g.out_neigh(i)) {
-      if (wn.w < min)
-        min = wn.w;
-      if (wn.w > max)
-        max = wn.w;
-    }
-  }
-
-  std::cout << "Min edge weight: " << min << std::endl;
-  std::cout << "Max edge weight: " << max << std::endl;
-
-  std::cout << "Max out_degree: " << max_out << std::endl;
-  std::cout << "Max in_degree: " << max_in << std::endl;
-  std::cout << "Min out_degree: " << min_out << std::endl;
-  std::cout << "Min in_degree: " << min_in << std::endl;
 
   auto SSSPBound = [&sp, &cli](const WGraph& g) {
     auto source = sp.PickNext();

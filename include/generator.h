@@ -11,7 +11,7 @@
 #include <random>
 
 #include "graph.h"
-#include "parallel/pvector.h"
+#include "parallel/vector.h"
 #include "util.h"
 
 /*
@@ -64,7 +64,7 @@ template <typename NodeID_, typename DestID_ = NodeID_, typename WeightT_ = Node
 class Generator {
   typedef EdgePair<NodeID_, DestID_> Edge;
   typedef EdgePair<NodeID_, NodeWeight<NodeID_, WeightT_>> WEdge;
-  typedef pvector<Edge> EdgeList;
+  typedef parallel::vector<Edge> EdgeList;
 
 public:
   Generator(int scale, int degree) {
@@ -81,7 +81,7 @@ public:
   }
 
   void PermuteIDs(EdgeList& el) {
-    pvector<NodeID_> permutation(num_nodes_);
+    parallel::vector<NodeID_> permutation(num_nodes_);
     std::mt19937 rng(kRandSeed);
 #pragma omp parallel for
     for (NodeID_ n = 0; n < num_nodes_; n++)
@@ -157,10 +157,10 @@ public:
     return el;
   }
 
-  static void InsertWeights(pvector<EdgePair<NodeID_, NodeID_>>& el) {}
+  static void InsertWeights(parallel::vector<EdgePair<NodeID_, NodeID_>>& el) {}
 
   // Overwrites existing weights with random from [1,255]
-  static void InsertWeights(pvector<WEdge>& el) {
+  static void InsertWeights(parallel::vector<WEdge>& el) {
 #pragma omp parallel
     {
       rng_t_ rng;

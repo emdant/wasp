@@ -12,15 +12,15 @@
 
 namespace bucketing {
 
-using bucket_index = std::int64_t;
-constexpr inline bucket_index EMPTY_BUCKETS = std::numeric_limits<std::int64_t>::max() / 2;
+using priority_level = std::int64_t;
+constexpr inline priority_level EMPTY_BUCKETS = std::numeric_limits<std::int64_t>::max() / 2;
 
 struct node_prio {
   NodeID node;
-  bucket_index bucket;
+  priority_level bucket;
 };
 
-using nodes_chunk = containers::chunk<NodeID, bucket_index, 64>;
+using nodes_chunk = containers::chunk<NodeID, priority_level, 64>;
 
 } // namespace bucketing
 

@@ -10,15 +10,15 @@
 
 namespace parallel {
 
-template <typename T_>
+template <typename T>
 class padded_array {
 public:
   static inline constexpr size_t stride() {
-    if constexpr (sizeof(T_) > hardware_destructive_interference_size) {
-      return 1 + (sizeof(T_) % hardware_destructive_interference_size != 0 ? 1 : 0);
+    if constexpr (sizeof(T) > hardware_destructive_interference_size) {
+      return 1 + (sizeof(T) % hardware_destructive_interference_size != 0 ? 1 : 0);
     } else {
-      constexpr int trunc = hardware_destructive_interference_size / sizeof(T_);
-      constexpr float f = hardware_destructive_interference_size / sizeof(T_);
+      constexpr int trunc = hardware_destructive_interference_size / sizeof(T);
+      constexpr float f = hardware_destructive_interference_size / sizeof(T);
       return f > trunc ? trunc + 1 : trunc;
     }
   }
@@ -26,7 +26,7 @@ public:
   struct iterator {
     using iterator_category = std::forward_iterator_tag;
     using difference_type = std::ptrdiff_t;
-    using value_type = T_;
+    using value_type = T;
     using pointer = value_type*;
     using reference = value_type&;
 
@@ -58,11 +58,11 @@ public:
   padded_array() : start_(nullptr), end_size_(nullptr) {}
 
   explicit padded_array(size_t num_elements) {
-    start_ = new T_[num_elements * stride()];
+    start_ = new T[num_elements * stride()];
     end_size_ = start_ + (num_elements * stride());
   }
 
-  padded_array(size_t num_elements, const T_& init_val) : padded_array(num_elements) {
+  padded_array(size_t num_elements, const T& init_val) : padded_array(num_elements) {
     fill(init_val);
   }
 
@@ -105,15 +105,15 @@ public:
     release_resources();
   }
 
-  T_& operator[](size_t n) {
+  T& operator[](size_t n) {
     return start_[n * stride()];
   }
 
-  const T_& operator[](size_t n) const {
+  const T& operator[](size_t n) const {
     return start_[n * stride()];
   }
 
-  void fill(T_ init_val) {
+  void fill(T init_val) {
 #pragma omp parallel for schedule(static, 1)
     for (size_t i = 0; i < size(); i++)
       start_[i * stride()] = init_val;
@@ -131,7 +131,7 @@ public:
     return iterator(end_size_);
   }
 
-  T_* data() const {
+  T* data() const {
     return start_;
   }
 
@@ -141,8 +141,8 @@ public:
   }
 
 private:
-  T_* start_;
-  T_* end_size_;
+  T* start_;
+  T* end_size_;
 };
 
 } // namespace parallel

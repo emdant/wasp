@@ -19,22 +19,22 @@ public:
     buckets_.resize(128);
   }
 
-  bucket<ChunkT>& get(bucket_index index) {
-    return buckets_[index];
+  bucket<ChunkT>& get(priority_level p) {
+    return buckets_[p];
   }
 
-  void push(NodeID node, bucket_index index) {
+  void push(NodeID node, priority_level p) {
     auto current_size = buckets_.size();
-    if (index >= current_size) {
-      while ((current_size <<= 1) <= index)
+    if (p >= current_size) {
+      while ((current_size <<= 1) <= p)
         ;
       buckets_.resize(current_size);
     }
 
-    buckets_[index].push_value(node, index);
+    buckets_[p].push_value(node, p);
   }
 
-  bucket_index first_nonempty() {
+  priority_level first_nonempty() {
     for (auto i = 0; i < buckets_.size(); i++) {
       if (!buckets_[i].empty()) {
         return i;
