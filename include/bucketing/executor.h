@@ -9,7 +9,6 @@
 
 #include "omp.h"
 
-#include "../containers/static_buffer.h"
 #include "../parallel/atomics_array.h"
 #include "../parallel/pparray.h"
 #include "../timer.h"
@@ -55,7 +54,6 @@ public:
     {
       int tid = omp_get_thread_num();
       auto& my_frontier = frontiers_[tid];
-      containers::static_fifo<nodes_chunk*> stolen_chunks(num_threads_);
 
       while (true) {
 
@@ -68,7 +66,8 @@ public:
               process_node(u, bucket, is_leaf_, my_frontier);
           }
 
-          stolen_chunks.clear();
+          std::vector<nodes_chunk*> stolen_chunks;
+          stolen_chunks.reserve(num_threads_);
 
           auto next_bucket = my_frontier.next_index();
           bucket_index min = next_bucket;
@@ -87,7 +86,7 @@ public:
             my_frontier.set_current(min);
 
             for (auto i = 0; i < stolen_chunks.size(); i++) {
-              auto chunk = stolen_chunks.pop_front();
+              auto& chunk = stolen_chunks[i];
               while (!chunk->empty()) {
                 auto u = chunk->pop_front();
                 if (cond_operation_(u, chunk->priority))
