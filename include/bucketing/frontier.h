@@ -23,29 +23,51 @@ private:
 
 public:
   frontier() {
-    buckets_.reserve(1024);
-    buckets_.resize(128);
+    buckets_.reserve(8192);
+    buckets_.resize(8192);
 
     stealing_deque_.store(buckets_[0].deque());
   }
 
-  inline void push(value_type value, priority_type priority) {
-    auto current_size = buckets_.size();
-    if (priority >= current_size) {
-      while ((current_size <<= 1) <= priority)
-        ;
-
-      buckets_.resize(current_size);
+  ~frontier() {
+    if (omp_get_thread_num() == 0) {
+      //       std::cout << "push time " << pusht.Seconds() << std::endl;
+      //       std::cout << "pop time " << popt.Seconds() << std::endl;
     }
+  }
+
+  inline void push(value_type value, priority_type priority) {
+    //     pusht.Start();
+    if (priority >= buckets_.size())
+      resize_buckets(priority);
 
     buckets_[priority].push(value, priority);
+    //     pusht.Stop();
+  }
+
+  inline void push(ChunkT* chunk) {
+    //     pusht.Start();
+    if (chunk->priority >= buckets_.size())
+      resize_buckets(chunk->priority);
+
+    buckets_[chunk->priority].push(chunk);
+    //     pusht.Stop();
   }
 
   inline std::optional<node_prio> pop() {
+    //     popt.Start();
     auto curr = current_.load(std::memory_order_relaxed);
-    if (curr == EMPTY_BUCKETS)
+
+    std::optional<node_prio> tmp = std::nullopt;
+
+    if (curr == EMPTY_BUCKETS) {
+      //       popt.Stop();
       return std::nullopt;
-    return buckets_[curr].pop();
+    }
+
+    tmp = buckets_[curr].pop();
+    //     popt.Stop();
+    return tmp;
   }
 
   inline ChunkT* steal() {
@@ -64,17 +86,19 @@ public:
     return buckets_[current_.load(std::memory_order_relaxed)].empty();
   }
 
-  inline void set_current(bucket_index index) {
-    if (index == EMPTY_BUCKETS)
+  inline void advance() {
+    auto next = next_index();
+
+    if (next == EMPTY_BUCKETS)
       stealing_deque_.store(nullptr);
     else
-      stealing_deque_.store(buckets_[index].deque());
+      stealing_deque_.store(buckets_[next].deque());
 
-    current_.store(index, std::memory_order_release);
+    current_.store(next, std::memory_order_release);
   }
 
-  bucket_index next_index() {
-    for (auto i = 0; i < buckets_.size(); i++) {
+  bucket_index next_index(bucket_index start_from = 0) {
+    for (auto i = start_from; i < buckets_.size(); i++) {
       if (!buckets_[i].empty()) {
         return i;
       }
@@ -86,6 +110,14 @@ private:
   std::atomic<bucket_index> current_{0};
   std::vector<bucket<ChunkT>> buckets_;
   std::atomic<parallel::deque<ChunkT*>*> stealing_deque_;
+  //   CumulativeTimer pusht, popt;
+
+  inline void resize_buckets(priority_type at_least) {
+    auto size = buckets_.size();
+    while ((size <<= 1) <= at_least)
+      ;
+    buckets_.resize(size);
+  }
 };
 
 }; // namespace bucketing

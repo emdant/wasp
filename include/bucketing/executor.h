@@ -55,7 +55,6 @@ public:
     {
       int tid = omp_get_thread_num();
       auto& my_frontier = frontiers_[tid];
-      containers::static_fifo<nodes_chunk*> stolen_chunks(num_threads_);
 
       while (true) {
 
@@ -69,36 +68,17 @@ public:
           }
         }
 
-        stolen_chunks.clear();
-
-        auto next_bucket = my_frontier.next_index();
+        auto next_bucket = my_frontier.next_index(my_frontier.current_index());
         bucket_index min = next_bucket;
         for (auto i = (tid + 1) % num_threads_; i != tid; i = (i + 1) % num_threads_) {
           if (frontiers_[i].current_index() <= next_bucket) {
             auto chunk = frontiers_[i].steal();
-            if (chunk != nullptr) {
-              min = std::min(min, chunk->priority);
-              stolen_chunks.push_back(chunk);
-            }
+            if (chunk != nullptr)
+              my_frontier.push(chunk);
           }
         }
 
-        // Processing stolen chunks
-        if (!stolen_chunks.empty()) {
-
-          for (auto i = 0; i < stolen_chunks.size(); i++) {
-            auto chunk = stolen_chunks.pop_front();
-            while (!chunk->empty()) {
-              auto u = chunk->pop_front();
-              if (cond_operation_(u, chunk->priority))
-                process_node(u, chunk->priority, is_leaf_, my_frontier);
-            }
-            delete chunk;
-          }
-        }
-
-        next_bucket = my_frontier.next_index();
-        my_frontier.set_current(next_bucket);
+        my_frontier.advance();
 
         if (next_bucket == EMPTY_BUCKETS) {
           bool all_finished = true;
