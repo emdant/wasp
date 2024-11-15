@@ -47,26 +47,26 @@ parallel::atomics_array<bfs_pair> BFS(const Graph& g, NodeID source, int32_t del
 
   internal_execution_timer.Start();
 
-  parallel::atomics_array<bfs_pair> parent(g.num_nodes(), {-1, DIST_INF});
-  parent[source] = {source, 0};
+  parallel::atomics_array<bfs_pair> bfs_tree(g.num_nodes(), {-1, DIST_INF});
+  bfs_tree[source] = {source, 0};
 
   auto cond = [&](NodeID u, priority_level i) -> bool {
-    return parent[u].load(std::memory_order_relaxed).level >= delta * i;
+    return bfs_tree[u].load(std::memory_order_relaxed).level >= delta * i;
   };
 
   auto visit_edge = [&](NodeID u, NodeID v) -> std::optional<WeightT> {
-    bfs_pair old = parent[v].load(std::memory_order_relaxed);
-    bfs_pair np = {u, parent[u].load(std::memory_order_relaxed).level + 1};
+    bfs_pair old = bfs_tree[v].load(std::memory_order_relaxed);
+    bfs_pair np = {u, bfs_tree[u].load(std::memory_order_relaxed).level + 1};
     while (np.level < old.level) {
-      if (parent[v].compare_exchange_weak(old, np, std::memory_order_acq_rel, std::memory_order_acquire)) {
+      if (bfs_tree[v].compare_exchange_weak(old, np, std::memory_order_acq_rel, std::memory_order_acquire)) {
         return np.level;
       }
     }
     return std::nullopt;
   };
 
-  auto coarsen = [&](WeightT dist) -> bucketing::priority_level {
-    return dist / delta;
+  auto coarsen = [&](WeightT level) -> bucketing::priority_level {
+    return level / delta;
   };
 
   bucketing::executor bucketing(g, cond, visit_edge, coarsen);
@@ -84,7 +84,7 @@ parallel::atomics_array<bfs_pair> BFS(const Graph& g, NodeID source, int32_t del
 
   cout << "Trial Time: " << internal_execution_timer.Seconds() << endl;
 
-  return parent;
+  return bfs_tree;
 }
 
 void PrintBFSStats(const Graph& g, parallel::atomics_array<bfs_pair>& bfs_tree) {
