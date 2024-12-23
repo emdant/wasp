@@ -13,6 +13,8 @@
 #include <type_traits>
 #include <vector>
 
+#include "graph.h"
+
 /*
 GAP Benchmark Suite
 Class:  CLBase
@@ -249,28 +251,33 @@ public:
 };
 
 class CLConvert : public CLBase {
+
   std::string out_filename_ = "";
   bool out_weighted_ = false;
-  bool out_el_ = false;
-  bool out_sg_ = false;
+  Format format_;
 
 public:
   CLConvert(int argc, char** argv, std::string name)
       : CLBase(argc, argv, name) {
-    get_args_ += "e:b:w";
+    get_args_ += "e:b:M:w";
     AddHelpLine('b', "file", "output serialized graph to file");
     AddHelpLine('e', "file", "output edge list to file");
+    AddHelpLine('M', "file", "output matrix market to file");
     AddHelpLine('w', "file", "make output weighted");
   }
 
   void HandleArg(signed char opt, char* opt_arg) override {
     switch (opt) {
     case 'b':
-      out_sg_ = true;
+      format_ = GAP_BINARY;
       out_filename_ = std::string(opt_arg);
       break;
     case 'e':
-      out_el_ = true;
+      format_ = EDGE_LIST;
+      out_filename_ = std::string(opt_arg);
+      break;
+    case 'M':
+      format_ = MATRIX_MARKET;
       out_filename_ = std::string(opt_arg);
       break;
     case 'w':
@@ -283,8 +290,7 @@ public:
 
   std::string out_filename() const { return out_filename_; }
   bool out_weighted() const { return out_weighted_; }
-  bool out_el() const { return out_el_; }
-  bool out_sg() const { return out_sg_; }
+  Format format() const { return format_; }
 };
 
 class CLStats : public CLBase {

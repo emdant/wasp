@@ -34,6 +34,32 @@ public:
     }
   }
 
+  void WriteMM(std::fstream& out) {
+    constexpr size_t THRESHOLD = size_t(1) << 32; // 4 GiB
+    std::stringstream buffer;
+
+    buffer << "\%\%MatrixMarket matrix coordinate ";
+    if constexpr (std::is_same_v<NodeID_, DestID_>)
+      buffer << "pattern";
+    else if constexpr (std::is_integral_v<typename DestID_::WeightT>)
+      buffer << "integer";
+    else
+      buffer << "real";
+    buffer << " general";
+    buffer << std::endl;
+    buffer << g_.num_nodes() << " " << g_.num_nodes() << " " << g_.num_edges() << std::endl;
+    for (NodeID_ u = 0; u < g_.num_nodes(); u++) {
+      for (DestID_ v : g_.out_neigh(u))
+        buffer << u + 1 << " " << v + 1 << std::endl;
+
+      if ((size_t)buffer.tellp() >= THRESHOLD) {
+        out << buffer.rdbuf();
+        std::stringstream().swap(buffer);
+      }
+    }
+    out << buffer.rdbuf();
+  }
+
   void WriteSerializedGraph(std::fstream& out) {
     if (!std::is_same<NodeID_, SGID>::value) {
       std::cout << "serialized graphs only allowed for 32b IDs" << std::endl;
@@ -66,7 +92,7 @@ public:
     }
   }
 
-  void WriteGraph(std::string filename, bool serialized = false) {
+  void WriteGraph(std::string filename, Format format) {
     if (filename == "") {
       std::cout << "No output filename given (Use -h for help)" << std::endl;
       std::exit(-8);
@@ -76,10 +102,19 @@ public:
       std::cout << "Couldn't write to file " << filename << std::endl;
       std::exit(-5);
     }
-    if (serialized)
+    switch (format) {
+    case GAP_BINARY:
       WriteSerializedGraph(file);
-    else
+      break;
+    case EDGE_LIST:
       WriteEL(file);
+      break;
+    case MATRIX_MARKET:
+      WriteMM(file);
+      break;
+    default:
+      break;
+    }
     file.close();
   }
 

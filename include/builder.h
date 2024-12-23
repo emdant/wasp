@@ -336,7 +336,7 @@ public:
         if ((r.GetSuffix() == ".sg") || (r.GetSuffix() == ".wsg")) {
           return r.ReadSerializedGraph();
         } else {
-          el = r.ReadFile(needs_weights_);
+          el = r.ReadFile(needs_weights_, symmetrize_);
         }
       } else if (cli_.scale() != -1) {
         Generator<NodeID_, DestID_> gen(cli_.scale(), cli_.degree());

@@ -13,6 +13,12 @@
 #include "parallel/vector.h"
 #include "util.h"
 
+enum Format {
+  GAP_BINARY,
+  EDGE_LIST,
+  MATRIX_MARKET
+};
+
 /*
 GAP Benchmark Suite
 Class:  CSRGraph
@@ -27,11 +33,18 @@ Simple container for graph in CSR format
 // Used to hold node & weight, with another node it makes a weighted edge
 template <typename NodeID_, typename WeightT_>
 struct NodeWeight {
+  using WeightT = WeightT_;
+
   NodeID_ v;
   WeightT_ w;
   NodeWeight() {}
   NodeWeight(NodeID_ v) : v(v), w(1) {}
   NodeWeight(NodeID_ v, WeightT_ w) : v(v), w(w) {}
+
+  NodeWeight& operator+=(const int rhs) {
+    v += rhs;
+    return *this;
+  }
 
   bool operator<(const NodeWeight& rhs) const {
     return v == rhs.v ? w < rhs.w : v < rhs.v;
@@ -51,6 +64,12 @@ struct NodeWeight {
     return v;
   }
 };
+
+template <typename NodeID_, typename WeightT_>
+NodeWeight<NodeID_, WeightT_> operator+(NodeWeight<NodeID_, WeightT_> lhs, const int rhs) {
+  lhs += rhs;
+  return lhs;
+}
 
 template <typename NodeID_, typename WeightT_>
 std::ostream& operator<<(std::ostream& os, const NodeWeight<NodeID_, WeightT_>& nw) {

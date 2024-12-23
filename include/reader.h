@@ -47,8 +47,37 @@ public:
   EdgeList ReadInEL(std::ifstream& in) {
     EdgeList el;
     NodeID_ u, v;
+
+    while (true) {
+      char c = in.peek();
+      if (c == '%') {
+        in.ignore(200, '\n');
+      } else {
+        break;
+      }
+    }
+
     while (in >> u >> v) {
       el.push_back(Edge(u, v));
+    }
+    return el;
+  }
+
+  EdgeList ReadInMTXEL(std::ifstream& in) {
+    EdgeList el;
+    NodeID_ u, v;
+
+    while (true) {
+      char c = in.peek();
+      if (c == '%') {
+        in.ignore(200, '\n');
+      } else {
+        break;
+      }
+    }
+
+    while (in >> u >> v) {
+      el.push_back(Edge(u - 1, v - 1));
     }
     return el;
   }
@@ -57,6 +86,16 @@ public:
     EdgeList el;
     NodeID_ u;
     NodeWeight<NodeID_, WeightT_> v;
+
+    while (true) {
+      char c = in.peek();
+      if (c == '%') {
+        in.ignore(200, '\n');
+      } else {
+        break;
+      }
+    }
+
     while (in >> u >> v) {
       el.push_back(Edge(u, v));
     }
@@ -141,7 +180,7 @@ public:
 
   // Note: converts vertex numbering from 1..N to 0..N-1
   // Note: weights casted to type WeightT_
-  EdgeList ReadInMTX(std::ifstream& in, bool& needs_weights) {
+  EdgeList ReadInMTX(std::ifstream& in, bool& needs_weights, bool symmetrize) {
     EdgeList el;
     std::string start, object, format, field, symmetry, line;
     in >> start >> object >> format >> field >> symmetry >> std::ws;
@@ -201,13 +240,13 @@ public:
         edge_stream >> v;
         v.v -= 1;
         el.push_back(Edge(u - 1, v));
-        if (undirected)
+        if (undirected && !symmetrize)
           el.push_back(Edge(v.v, NodeWeight<NodeID_, WeightT_>(u - 1, v.w)));
       } else {
         NodeID_ v;
         edge_stream >> v;
         el.push_back(Edge(u - 1, v - 1));
-        if (undirected)
+        if (undirected && !symmetrize)
           el.push_back(Edge(v - 1, u - 1));
       }
     }
@@ -215,7 +254,7 @@ public:
     return el;
   }
 
-  EdgeList ReadFile(bool& needs_weights) {
+  EdgeList ReadFile(bool& needs_weights, bool symmetrize) {
     Timer t;
     t.Start();
     EdgeList el;
@@ -236,7 +275,9 @@ public:
     } else if (suffix == ".graph") {
       el = ReadInMetis(file, needs_weights);
     } else if (suffix == ".mtx") {
-      el = ReadInMTX(file, needs_weights);
+      el = ReadInMTX(file, needs_weights, symmetrize);
+    } else if (suffix == ".mtxel") {
+      el = ReadInMTXEL(file);
     } else {
       std::cout << "Unrecognized suffix: " << suffix << std::endl;
       std::exit(-3);

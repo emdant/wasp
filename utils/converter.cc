@@ -19,13 +19,13 @@ int main(int argc, char* argv[]) {
     WGraph wg = bw.MakeGraph();
     wg.PrintStats();
     WeightedWriter ww(wg);
-    ww.WriteGraph(cli.out_filename(), cli.out_sg());
+    ww.WriteGraph(cli.out_filename(), cli.format());
   } else {
     Builder b(cli);
     Graph g = b.MakeGraph();
     g.PrintStats();
     Writer w(g);
-    w.WriteGraph(cli.out_filename(), cli.out_sg());
+    w.WriteGraph(cli.out_filename(), cli.format());
   }
   return 0;
 }
