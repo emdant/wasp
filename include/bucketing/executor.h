@@ -32,14 +32,22 @@ public:
   void run(NodeID source) {
     frontiers_[starting_thread_].push(source, 0);
 
+    if (g_.directed()) {
 #pragma omp parallel for schedule(static)
-    for (NodeID node = 0; node < g_.num_nodes(); node++) {
-      if (g_.in_degree(node) == 1 && g_.out_degree(node) == 0)
-        is_leaf_[node] = true;
-      else if ((g_.in_degree(node) == 1 && g_.out_degree(node) == 1)) {
-        NodeID in_src = (NodeID)g_.in_index()[node][0];
-        NodeID out_dst = (NodeID)g_.out_index()[node][0];
-        if (in_src == out_dst)
+      for (NodeID node = 0; node < g_.num_nodes(); node++) {
+        if (g_.in_degree(node) == 1 && g_.out_degree(node) == 0)
+          is_leaf_[node] = true;
+        else if ((g_.in_degree(node) == 1 && g_.out_degree(node) == 1)) {
+          NodeID in_src = (NodeID)g_.in_index()[node][0];
+          NodeID out_dst = (NodeID)g_.out_index()[node][0];
+          if (in_src == out_dst)
+            is_leaf_[node] = true;
+        }
+      }
+    } else { // undirected
+#pragma omp parallel for schedule(static)
+      for (NodeID node = 0; node < g_.num_nodes(); node++) {
+        if (g_.out_degree(node) == 1)
           is_leaf_[node] = true;
       }
     }
