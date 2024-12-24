@@ -146,24 +146,27 @@ int main(int argc, char* argv[]) {
 
   WeightedBuilder b(cli);
   WGraph g = b.MakeGraph();
+  g.PrintStats();
+
   SourcePicker<WGraph> sp(g, cli);
 
-  auto SSSPBound = [&sp, &cli](const WGraph& g) {
+  for (auto i = 0; i < cli.num_sources(); i++) {
     auto source = sp.PickNext();
     std::cout << "Source: " << source << std::endl;
 
-    if (cli.logging_en())
-      return DeltaStep<true>(g, source, cli.delta());
-    else
-      return DeltaStep<false>(g, source, cli.delta());
-  };
+    auto SSSPBound = [&cli, source](const WGraph& g) {
+      if (cli.logging_en())
+        return DeltaStep<true>(g, source, cli.delta());
+      else
+        return DeltaStep<false>(g, source, cli.delta());
+    };
 
-  SourcePicker<WGraph> vsp(g, cli);
-  auto VerifierBound = [&vsp](const WGraph& g, const parallel::atomics_array<WeightT>& dist) {
-    return SSSPVerifier(g, vsp.PickNext(), dist);
-  };
+    auto VerifierBound = [source](const WGraph& g, const parallel::atomics_array<WeightT>& dist) {
+      return SSSPVerifier(g, source, dist);
+    };
 
-  BenchmarkKernel(cli, g, SSSPBound, PrintSSSPStats, VerifierBound);
+    BenchmarkKernel(cli, g, SSSPBound, PrintSSSPStats, VerifierBound);
+  }
 
   return 0;
 }

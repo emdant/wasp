@@ -122,19 +122,19 @@ public:
 
 class CLApp : public CLBase {
   bool do_analysis_ = false;
-  int num_trials_ = 16;
+  int num_trials_ = 12;
   int64_t start_vertex_ = -1;
   bool do_verify_ = false;
   bool enable_logging_ = false;
-  bool random_nonchanging_ = false;
+  int num_sources_ = 1;
 
 public:
   CLApp(int argc, char** argv, std::string name) : CLBase(argc, argv, name) {
-    get_args_ += "an:r:Rvl";
+    get_args_ += "an:r:S:Rvl";
     AddHelpLine('a', "", "output analysis of last run", "false");
     AddHelpLine('n', "n", "perform n trials", std::to_string(num_trials_));
     AddHelpLine('r', "node", "start from node r", "rand");
-    AddHelpLine('R', "", "start from random non-changing node", "false");
+    AddHelpLine('S', "sources", "number of source vertices", std::to_string(num_sources_));
     AddHelpLine('v', "", "verify the output of each run", "false");
     AddHelpLine('l', "", "log performance within each trial", "false");
   }
@@ -158,8 +158,8 @@ public:
     case 'l':
       enable_logging_ = true;
       break;
-    case 'R':
-      random_nonchanging_ = true;
+    case 'S':
+      num_sources_ = atoi(opt_arg);
       break;
     default:
       CLBase::HandleArg(opt, opt_arg);
@@ -171,7 +171,7 @@ public:
   int64_t start_vertex() const { return start_vertex_; }
   bool do_verify() const { return do_verify_; }
   bool logging_en() const { return enable_logging_; }
-  bool random_nonchanging() const { return random_nonchanging_; }
+  int num_sources() const { return num_sources_; }
 };
 
 class CLIterApp : public CLApp {

@@ -153,21 +153,27 @@ int main(int argc, char* argv[]) {
     return -1;
   Builder b(cli);
   Graph g = b.MakeGraph();
+  g.PrintStats();
+
   SourcePicker<Graph> sp(g, cli);
 
-  auto BFSBound = [&sp, &cli](const Graph& g) {
-    if (cli.logging_en())
-      return BFS<true>(g, sp.PickNext(), cli.delta());
-    else
-      return BFS<false>(g, sp.PickNext(), cli.delta());
-  };
+  for (auto i = 0; i < cli.num_sources(); i++) {
+    auto source = sp.PickNext();
+    std::cout << "Source: " << source << std::endl;
 
-  SourcePicker<Graph> vsp(g, cli);
-  auto VerifierBound = [&vsp](const Graph& g, parallel::atomics_array<bfs_pair>& parent) {
-    return BFSVerifier(g, vsp.PickNext(), parent);
-  };
+    auto BFSBound = [&cli, source](const Graph& g) {
+      if (cli.logging_en())
+        return BFS<true>(g, source, cli.delta());
+      else
+        return BFS<false>(g, source, cli.delta());
+    };
 
-  BenchmarkKernel(cli, g, BFSBound, PrintBFSStats, VerifierBound);
+    auto VerifierBound = [source](const Graph& g, parallel::atomics_array<bfs_pair>& parent) {
+      return BFSVerifier(g, source, parent);
+    };
+
+    BenchmarkKernel(cli, g, BFSBound, PrintBFSStats, VerifierBound);
+  }
 
   return 0;
 }
