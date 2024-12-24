@@ -47,5 +47,7 @@ add_executable(bfs src/bfs.cc)
 
 add_executable(converter utils/converter.cc)
 add_executable(stats utils/stats.cc)
+add_executable(weight utils/weight.cc)
+add_executable(degree utils/degree.cc)
 
 add_subdirectory(tests)

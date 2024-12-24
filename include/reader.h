@@ -235,13 +235,24 @@ public:
       std::istringstream edge_stream(line);
       NodeID_ u;
       edge_stream >> u;
-      if (read_weights) {
+      if (read_weights && (field == "integer")) {
         NodeWeight<NodeID_, WeightT_> v;
         edge_stream >> v;
         v.v -= 1;
         el.push_back(Edge(u - 1, v));
-        if (undirected && !symmetrize)
+        if (undirected && !symmetrize) {
           el.push_back(Edge(v.v, NodeWeight<NodeID_, WeightT_>(u - 1, v.w)));
+        }
+      } else if (read_weights && (field == "real")) {
+        NodeWeight<NodeID_, float> v;
+        edge_stream >> v;
+        v.v -= 1;
+        v.w *= 1e8;
+        NodeWeight<NodeID_, WeightT_> v_trunc(v.v, v.w);
+        el.push_back(Edge(u - 1, v_trunc));
+        if (undirected && !symmetrize) {
+          el.push_back(Edge(v.v, NodeWeight<NodeID_, WeightT_>(u - 1, v.w)));
+        }
       } else {
         NodeID_ v;
         edge_stream >> v;
