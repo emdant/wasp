@@ -47,7 +47,10 @@ public:
       buffer << "real";
     buffer << " general";
     buffer << std::endl;
-    buffer << g_.num_nodes() << " " << g_.num_nodes() << " " << g_.num_edges() << std::endl;
+    auto num_edges = g_.directed() ? g_.num_edges() : g_.num_edges() * 2;
+    buffer << g_.num_nodes() << " " << g_.num_nodes() << " " << num_edges << std::endl;
+
+    // will print double the number of undirected edges for undirected graphs
     for (NodeID_ u = 0; u < g_.num_nodes(); u++) {
       for (DestID_ v : g_.out_neigh(u))
         buffer << u + 1 << " " << v + 1 << std::endl;
