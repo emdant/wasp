@@ -15,42 +15,52 @@
 #include "benchmark.h"
 #include "frontier.h"
 
+#define PROCESS_NEIGHBOR(u, bucket)                           \
+  if (cond_operation((u), (bucket))) {                        \
+    for (WNode wn : g_.out_neigh((u))) {                      \
+      if (auto new_prio = push_edge((u), wn)) {               \
+        my_frontier.push(wn.v, coarsen_operation(*new_prio)); \
+      }                                                       \
+    }                                                         \
+  }
+
 namespace bucketing {
 
-template <typename Graph, typename CondOpT, typename EdgeOpT, typename CoarsenOpT>
+template <typename GraphT>
 class executor {
 public:
-  executor(const Graph& g, CondOpT& cond_operation, EdgeOpT& edge_operation, CoarsenOpT& coarsen_operation)
+  executor(const GraphT& g)
       : num_threads_(omp_get_max_threads()),
         g_(g),
-        cond_operation_(cond_operation),
-        edge_operation_(edge_operation),
-        coarsen_operation_(coarsen_operation),
-        frontiers_(num_threads_),
-        is_leaf_(g_.num_nodes()) {}
+        frontiers_(num_threads_) {}
 
-  void run(NodeID source) {
+  template <typename... Args>
+  inline void operator()(Args&&... args) {
+    if (g_.directed())
+      run_directed(std::forward<Args>(args)...);
+    else
+      run_undirected(std::forward<Args>(args)...);
+  }
+
+private:
+  template <typename... Args>
+  inline void run_directed(Args&&... args) {
+    run<false, Args...>(std::forward<Args>(args)...);
+  }
+
+  template <typename... Args>
+  inline void run_undirected(Args&&... args) {
+    run<true, Args...>(std::forward<Args>(args)...);
+  }
+
+  template <bool UNDIRECTED, typename SrcT, typename PushOpT, typename CoarsenOpT, typename CondOpT = std::function<bool()>, typename PullSafeOpT = std::function<void()>, typename PullUnsafeOpT = std::function<void()>>
+  inline void run(
+      NodeID source,
+      PushOpT push_edge,
+      CoarsenOpT coarsen_operation,
+      CondOpT cond_operation = [] { return true; }, PullSafeOpT pull_edge_safe = [] {}, PullUnsafeOpT pull_edge_unsafe = [] {}
+  ) {
     frontiers_[starting_thread_].push(source, 0);
-
-    if (g_.directed()) {
-#pragma omp parallel for schedule(static)
-      for (NodeID node = 0; node < g_.num_nodes(); node++) {
-        if (g_.in_degree(node) == 1 && g_.out_degree(node) == 0)
-          is_leaf_[node] = true;
-        else if ((g_.in_degree(node) == 1 && g_.out_degree(node) == 1)) {
-          NodeID in_src = (NodeID)g_.in_index()[node][0];
-          NodeID out_dst = (NodeID)g_.out_index()[node][0];
-          if (in_src == out_dst)
-            is_leaf_[node] = true;
-        }
-      }
-    } else { // undirected
-#pragma omp parallel for schedule(static)
-      for (NodeID node = 0; node < g_.num_nodes(); node++) {
-        if (g_.out_degree(node) == 1)
-          is_leaf_[node] = true;
-      }
-    }
 
 #pragma omp parallel
     {
@@ -64,13 +74,7 @@ public:
           // Process current bucket
           for (auto node_pair = my_frontier.pop(); node_pair; node_pair = my_frontier.pop()) {
             auto [u, bucket] = node_pair.value();
-            if (cond_operation_(u, bucket)) {
-              for (WNode wn : g_.out_neigh(u)) {
-                if (auto new_prio = edge_operation_(u, wn))
-                  if (!is_leaf_[wn.v])
-                    my_frontier.push(wn.v, coarsen_operation_(*new_prio));
-              }
-            }
+            PROCESS_NEIGHBOR(u, bucket);
           }
 
           std::vector<nodes_chunk*> stolen_chunks;
@@ -96,18 +100,11 @@ public:
               auto& chunk = stolen_chunks[i];
               while (!chunk->empty()) {
                 auto u = chunk->pop_front();
-                if (cond_operation_(u, chunk->priority)) {
-                  for (WNode wn : g_.out_neigh(u)) {
-                    if (auto new_prio = edge_operation_(u, wn))
-                      if (!is_leaf_[wn.v])
-                        my_frontier.push(wn.v, coarsen_operation_(*new_prio));
-                  }
-                }
+                PROCESS_NEIGHBOR(u, chunk->priority);
               }
               delete chunk;
             }
           }
-
         } while (!my_frontier.current_empty());
 
         auto next_bucket = my_frontier.next_priority_level();
@@ -131,16 +128,25 @@ public:
     }
   }
 
-private:
   static constexpr inline int starting_thread_ = 0;
 
   int num_threads_;
-  const Graph& g_;
-  CondOpT& cond_operation_;
-  EdgeOpT& edge_operation_;
-  CoarsenOpT& coarsen_operation_;
+  const GraphT& g_;
   parallel::padded_array<frontier<nodes_chunk>> frontiers_;
-  std::vector<bool> is_leaf_;
+
+  template <typename PullSafeOpT, typename... Args>
+  constexpr inline void pull_safe(PullSafeOpT pull_edge_safe, Args&&... args) {
+    if constexpr (!std::is_same_v<PullSafeOpT, std::function<void()>>) {
+      pull_edge_safe(std::forward<Args>(args)...);
+    }
+  }
+
+  template <typename PullUnsafeOpT, typename... Args>
+  constexpr inline void pull_unsafe(PullUnsafeOpT pull_edge_unsafe, Args&&... args) {
+    if constexpr (!std::is_same_v<PullUnsafeOpT, std::function<void()>>) {
+      pull_edge_unsafe(std::forward<Args>(args)...);
+    }
+  }
 };
 
 } // namespace bucketing

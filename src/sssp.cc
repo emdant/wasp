@@ -49,7 +49,7 @@ parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32
     return dist[u].load(std::memory_order_relaxed) >= delta * i;
   };
 
-  auto relax_edge = [&](NodeID u, WNode wv) -> std::optional<WeightT> {
+  auto relax_push = [&](NodeID u, WNode wv) -> std::optional<WeightT> { // outgoing edge
     WeightT old_dist = dist[wv.v].load(std::memory_order_acquire);
     WeightT new_dist = dist[u].load(std::memory_order_acquire) + wv.w;
     while (new_dist < old_dist) {
@@ -60,17 +60,38 @@ parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32
     return std::nullopt;
   };
 
+  auto relax_pull_safe = [&](WNode wu, NodeID v) -> std::optional<WeightT> { // incoming edge
+    WeightT old_dist = dist[v].load(std::memory_order_acquire);
+    WeightT new_dist = dist[wu.v].load(std::memory_order_acquire) + wu.w;
+    while (new_dist < old_dist) {
+      if (dist[v].compare_exchange_weak(old_dist, new_dist, std::memory_order_acq_rel, std::memory_order_acquire)) {
+        return new_dist;
+      }
+    }
+    return std::nullopt;
+  };
+
+  auto relax_pull_unsafe = [&](WNode wu, NodeID v) -> std::optional<WeightT> { // incoming edge
+    WeightT old_dist = dist[v].load(std::memory_order_acquire);
+    WeightT new_dist = dist[wu.v].load(std::memory_order_acquire) + wu.w;
+    if (new_dist < old_dist) {
+      dist[v].store(new_dist, std::memory_order_release);
+      return new_dist;
+    }
+    return std::nullopt;
+  };
+
   auto coarsen = [&](WeightT dist) -> bucketing::priority_level {
     return dist / delta;
   };
 
-  bucketing::executor bucketing(g, cond, relax_edge, coarsen);
+  bucketing::executor bucketing(g);
 
   internal_execution_timer.Stop();
   cout << "Allocation time: " << internal_execution_timer.Seconds() << endl;
 
   internal_execution_timer.Start();
-  bucketing.run(source);
+  bucketing(source, relax_push, coarsen, cond, relax_pull_safe, relax_pull_unsafe);
   internal_execution_timer.Stop();
 
 #ifdef PAPI_PROFILE

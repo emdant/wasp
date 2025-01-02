@@ -69,13 +69,13 @@ parallel::atomics_array<bfs_pair> BFS(const Graph& g, NodeID source, int32_t del
     return level / delta;
   };
 
-  bucketing::executor bucketing(g, cond, visit_edge, coarsen);
+  bucketing::executor bucketing(g);
 
   internal_execution_timer.Stop();
   cout << "Allocation time: " << internal_execution_timer.Seconds() << endl;
 
   internal_execution_timer.Start();
-  bucketing.run(source);
+  bucketing(source, visit_edge, coarsen, cond);
   internal_execution_timer.Stop();
 
 #ifdef PAPI_PROFILE
