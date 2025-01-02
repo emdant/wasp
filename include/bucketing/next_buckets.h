@@ -24,11 +24,10 @@ public:
   }
 
   void push(NodeID node, priority_level p) {
-    auto current_size = buckets_.size();
-    if (p >= current_size) {
-      while ((current_size <<= 1) <= p)
-        ;
-      buckets_.resize(current_size);
+    if (p >= buckets_.size()) {
+      auto new_size = buckets_.size();
+      new_size = std::max(static_cast<priority_level>(new_size) * 2, p + 1);
+      buckets_.resize(new_size);
     }
 
     buckets_[p].push_value(node, p);
