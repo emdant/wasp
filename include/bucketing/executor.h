@@ -4,68 +4,32 @@
 #ifndef BUCKETING_EXECUTOR_H_
 #define BUCKETING_EXECUTOR_H_
 
-#include <iostream>
 #include <vector>
 
 #include "omp.h"
 
-#include "../parallel/atomics_array.h"
 #include "../parallel/padded_array.h"
 #include "../timer.h"
 #include "benchmark.h"
 #include "frontier.h"
 
-#define PROCESS_NEIGHBOR(u, bucket)                           \
-  if (cond_operation((u), (bucket))) {                        \
-    for (WNode wn : g_.out_neigh((u))) {                      \
-      if (auto new_prio = push_edge((u), wn)) {               \
-        my_frontier.push(wn.v, coarsen_operation(*new_prio)); \
-      }                                                       \
-    }                                                         \
-  }
-
 namespace bucketing {
 
-template <typename GraphT>
 class executor {
 public:
-  executor(const GraphT& g)
-      : num_threads_(omp_get_max_threads()),
-        g_(g),
-        frontiers_(num_threads_) {}
+  using frontier = bucketing::frontier<nodes_chunk>;
 
-  template <typename... Args>
-  inline void operator()(Args&&... args) {
-    if (g_.directed())
-      run_directed(std::forward<Args>(args)...);
-    else
-      run_undirected(std::forward<Args>(args)...);
-  }
+  executor() : num_threads_(omp_get_max_threads()), frontiers_(num_threads_) {}
 
-private:
-  template <typename... Args>
-  inline void run_directed(Args&&... args) {
-    run<false, Args...>(std::forward<Args>(args)...);
-  }
-
-  template <typename... Args>
-  inline void run_undirected(Args&&... args) {
-    run<true, Args...>(std::forward<Args>(args)...);
-  }
-
-  template <bool UNDIRECTED, typename SrcT, typename PushOpT, typename CoarsenOpT, typename CondOpT = std::function<bool()>, typename PullSafeOpT = std::function<void()>, typename PullUnsafeOpT = std::function<void()>>
-  inline void run(
-      NodeID source,
-      PushOpT push_edge,
-      CoarsenOpT coarsen_operation,
-      CondOpT cond_operation = [] { return true; }, PullSafeOpT pull_edge_safe = [] {}, PullUnsafeOpT pull_edge_unsafe = [] {}
-  ) {
-    frontiers_[starting_thread_].push(source, 0);
-
+  template <typename InitOpT, typename ProcessOpT>
+  inline void run(InitOpT init_operation, ProcessOpT process_operation) {
 #pragma omp parallel
     {
       int tid = omp_get_thread_num();
       auto& my_frontier = frontiers_[tid];
+
+      if (tid == starting_thread_)
+        init_operation(my_frontier);
 
       while (true) {
 
@@ -74,7 +38,7 @@ private:
           // Process current bucket
           for (auto node_pair = my_frontier.pop(); node_pair; node_pair = my_frontier.pop()) {
             auto [u, bucket] = node_pair.value();
-            PROCESS_NEIGHBOR(u, bucket);
+            process_operation(my_frontier, u, bucket);
           }
 
           std::vector<nodes_chunk*> stolen_chunks;
@@ -100,7 +64,7 @@ private:
               auto& chunk = stolen_chunks[i];
               while (!chunk->empty()) {
                 auto u = chunk->pop_front();
-                PROCESS_NEIGHBOR(u, chunk->priority);
+                process_operation(my_frontier, u, chunk->priority);
               }
               delete chunk;
             }
@@ -128,25 +92,11 @@ private:
     }
   }
 
+private:
   static constexpr inline int starting_thread_ = 0;
 
   int num_threads_;
-  const GraphT& g_;
-  parallel::padded_array<frontier<nodes_chunk>> frontiers_;
-
-  template <typename PullSafeOpT, typename... Args>
-  constexpr inline void pull_safe(PullSafeOpT pull_edge_safe, Args&&... args) {
-    if constexpr (!std::is_same_v<PullSafeOpT, std::function<void()>>) {
-      pull_edge_safe(std::forward<Args>(args)...);
-    }
-  }
-
-  template <typename PullUnsafeOpT, typename... Args>
-  constexpr inline void pull_unsafe(PullUnsafeOpT pull_edge_unsafe, Args&&... args) {
-    if constexpr (!std::is_same_v<PullUnsafeOpT, std::function<void()>>) {
-      pull_edge_unsafe(std::forward<Args>(args)...);
-    }
-  }
+  parallel::padded_array<frontier> frontiers_;
 };
 
 } // namespace bucketing

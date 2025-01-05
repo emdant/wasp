@@ -21,6 +21,7 @@
 #include "builder.h"
 #include "command_line.h"
 #include "graph.h"
+#include "leaves.h"
 #include "parallel/atomics_array.h"
 #include "parallel/padded_array.h"
 #include "parallel/vector.h"
@@ -32,24 +33,22 @@ using namespace bucketing;
 
 static constexpr WeightT DIST_INF = numeric_limits<WeightT>::max() / 2;
 
-template <bool logging = false>
-parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32_t delta) {
+template <typename GraphT, bool DIRECTED, bool CACHE_LEAVES>
+auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
 #ifdef PAPI_PROFILE
   PAPI_hl_region_begin("sssp-ws");
 #endif
 
-  Timer internal_execution_timer;
-
-  internal_execution_timer.Start();
-
   parallel::atomics_array<WeightT> dist(g.num_nodes(), DIST_INF);
   dist[source] = 0;
 
-  auto cond = [&](NodeID u, priority_level i) -> bool {
-    return dist[u].load(std::memory_order_relaxed) >= delta * i;
+  executor scheduler;
+
+  const auto init_sssp = [&](executor::frontier& my_frontier) {
+    my_frontier.push(source, 0);
   };
 
-  auto relax_push = [&](NodeID u, WNode wv) -> std::optional<WeightT> { // outgoing edge
+  const auto relax_push = [&](const NodeID u, const WNode wv) -> std::optional<WeightT> { // outgoing edge
     WeightT old_dist = dist[wv.v].load(std::memory_order_acquire);
     WeightT new_dist = dist[u].load(std::memory_order_acquire) + wv.w;
     while (new_dist < old_dist) {
@@ -60,7 +59,7 @@ parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32
     return std::nullopt;
   };
 
-  auto relax_pull_safe = [&](WNode wu, NodeID v) -> std::optional<WeightT> { // incoming edge
+  const auto relax_pull_safe = [&](WNode wu, NodeID v) -> std::optional<WeightT> { // incoming edge
     WeightT old_dist = dist[v].load(std::memory_order_acquire);
     WeightT new_dist = dist[wu.v].load(std::memory_order_acquire) + wu.w;
     while (new_dist < old_dist) {
@@ -71,37 +70,39 @@ parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32
     return std::nullopt;
   };
 
-  auto relax_pull_unsafe = [&](WNode wu, NodeID v) -> std::optional<WeightT> { // incoming edge
-    WeightT old_dist = dist[v].load(std::memory_order_acquire);
-    WeightT new_dist = dist[wu.v].load(std::memory_order_acquire) + wu.w;
-    if (new_dist < old_dist) {
-      dist[v].store(new_dist, std::memory_order_release);
-      return new_dist;
+  is_leaf<WGraph, DIRECTED, CACHE_LEAVES> is_leaf(g);
+
+  const auto process_node = [&](executor::frontier& my_frontier, const NodeID u, const priority_level bucket) {
+    if (dist[u].load(std::memory_order_relaxed) >= delta * bucket) {
+      if constexpr (!DIRECTED) {
+        if (g.out_degree(u) < hardware_constructive_interference_size / sizeof(WNode))
+          for (WNode wn : g.out_neigh(u)) {
+            relax_pull_safe(wn, u);
+          }
+      }
+
+      for (WNode wn : g.out_neigh(u)) {
+        if (auto new_prio = relax_push(u, wn)) {
+          if (!is_leaf(wn.v))
+            my_frontier.push(wn.v, new_prio.value() / delta);
+        }
+      }
     }
-    return std::nullopt;
   };
-
-  auto coarsen = [&](WeightT dist) -> bucketing::priority_level {
-    return dist / delta;
-  };
-
-  bucketing::executor bucketing(g);
-
-  internal_execution_timer.Stop();
-  cout << "Allocation time: " << internal_execution_timer.Seconds() << endl;
-
-  internal_execution_timer.Start();
-  bucketing(source, relax_push, coarsen, cond, relax_pull_safe, relax_pull_unsafe);
-  internal_execution_timer.Stop();
+  scheduler.run(init_sssp, process_node);
 
 #ifdef PAPI_PROFILE
   PAPI_hl_region_end("sssp-ws");
 #endif
-
-  cout << "Trial Time: " << internal_execution_timer.Seconds() << endl;
-  // bucketing.print_content();
-
   return dist;
+}
+
+parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32_t delta) {
+
+  if (g.directed())
+    return BestDeltaStepping<WGraph, true, true>(g, source, delta);
+  else
+    return BestDeltaStepping<WGraph, false, true>(g, source, delta);
 }
 
 void PrintSSSPStats(const WGraph& g, const parallel::atomics_array<WeightT>& dist) {
@@ -177,9 +178,9 @@ int main(int argc, char* argv[]) {
 
     auto SSSPBound = [&cli, source](const WGraph& g) {
       if (cli.logging_en())
-        return DeltaStep<true>(g, source, cli.delta());
+        return DeltaStep(g, source, cli.delta());
       else
-        return DeltaStep<false>(g, source, cli.delta());
+        return DeltaStep(g, source, cli.delta());
     };
 
     auto VerifierBound = [source](const WGraph& g, const parallel::atomics_array<WeightT>& dist) {
