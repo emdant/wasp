@@ -36,18 +36,21 @@ if (LINK_PAPI)
     link_libraries("papi")
 
     add_compile_definitions(PAPI_PROFILE)
-
+  else()
+    message(FATAL_ERROR "PAPI_DIR is not defined")
   endif()
 endif()
 
 
 add_executable(dijkstra src/dijkstra.cc)
 add_executable(sssp src/sssp.cc)
-add_executable(bfs src/bfs.cc)
+# add_executable(bfs src/bfs.cc)
+
 
 add_executable(converter utils/converter.cc)
 add_executable(stats utils/stats.cc)
 add_executable(weight utils/weight.cc)
 add_executable(degree utils/degree.cc)
+add_executable(read utils/read.cc)
 
 add_subdirectory(tests)
