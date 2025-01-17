@@ -44,7 +44,7 @@ endif()
 
 add_executable(dijkstra src/dijkstra.cc)
 add_executable(sssp src/sssp.cc)
-# add_executable(bfs src/bfs.cc)
+add_executable(bfs src/bfs.cc)
 
 
 add_executable(converter utils/converter.cc)

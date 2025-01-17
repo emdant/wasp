@@ -21,6 +21,7 @@
 #include "builder.h"
 #include "command_line.h"
 #include "graph.h"
+#include "leaves.h"
 #include "parallel/atomics_array.h"
 #include "parallel/padded_array.h"
 #include "parallel/vector.h"
@@ -37,21 +38,19 @@ struct bfs_pair {
   WeightT level;
 };
 
-template <bool logging = false>
-parallel::atomics_array<bfs_pair> BFS(const Graph& g, NodeID source, int32_t delta = 1) {
+template <typename GraphT, bool DIRECTED, bool CACHE_LEAVES>
+parallel::atomics_array<bfs_pair> BestBFS(const GraphT& g, NodeID source, int32_t delta = 1) {
 #ifdef PAPI_PROFILE
-  PAPI_hl_region_begin("sssp-ws");
+  PAPI_hl_region_begin("bfs");
 #endif
-
-  Timer internal_execution_timer;
-
-  internal_execution_timer.Start();
-
   parallel::atomics_array<bfs_pair> bfs_tree(g.num_nodes(), {-1, DIST_INF});
   bfs_tree[source] = {source, 0};
 
-  auto cond = [&](NodeID u, priority_level i) -> bool {
-    return bfs_tree[u].load(std::memory_order_relaxed).level >= delta * i;
+  executor scheduler;
+  is_leaf<GraphT, DIRECTED, CACHE_LEAVES> is_leaf(g);
+
+  const auto init_bfs = [&](executor::frontier& my_frontier) {
+    my_frontier.push(source, 0);
   };
 
   auto visit_edge = [&](NodeID u, NodeID v) -> std::optional<WeightT> {
@@ -65,26 +64,29 @@ parallel::atomics_array<bfs_pair> BFS(const Graph& g, NodeID source, int32_t del
     return std::nullopt;
   };
 
-  auto coarsen = [&](WeightT level) -> bucketing::priority_level {
-    return level / delta;
+  const auto process_node = [&](executor::frontier& my_frontier, const NodeID u, const priority_level bucket) {
+    if (bfs_tree[u].load(std::memory_order_relaxed).level >= delta * bucket) {
+      for (NodeID v : g.out_neigh(u)) {
+        if (auto level = visit_edge(u, v)) {
+          if (!is_leaf(v))
+            my_frontier.push(v, level.value() / delta);
+        }
+      }
+    }
   };
-
-  bucketing::executor bucketing(g);
-
-  internal_execution_timer.Stop();
-  cout << "Allocation time: " << internal_execution_timer.Seconds() << endl;
-
-  internal_execution_timer.Start();
-  bucketing(source, visit_edge, coarsen, cond);
-  internal_execution_timer.Stop();
+  scheduler.run(init_bfs, process_node);
 
 #ifdef PAPI_PROFILE
-  PAPI_hl_region_end("sssp-ws");
+  PAPI_hl_region_end("bfs");
 #endif
-
-  cout << "Trial Time: " << internal_execution_timer.Seconds() << endl;
-
   return bfs_tree;
+}
+
+parallel::atomics_array<bfs_pair> BFS(const Graph& g, NodeID source, int32_t delta) {
+  if (g.directed())
+    return BestBFS<Graph, true, true>(g, source, delta);
+  else
+    return BestBFS<Graph, false, true>(g, source, delta);
 }
 
 void PrintBFSStats(const Graph& g, parallel::atomics_array<bfs_pair>& bfs_tree) {
@@ -162,10 +164,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Source: " << source << std::endl;
 
     auto BFSBound = [&cli, source](const Graph& g) {
-      if (cli.logging_en())
-        return BFS<true>(g, source, cli.delta());
-      else
-        return BFS<false>(g, source, cli.delta());
+      return BFS(g, source, cli.delta());
     };
 
     auto VerifierBound = [source](const Graph& g, parallel::atomics_array<bfs_pair>& parent) {

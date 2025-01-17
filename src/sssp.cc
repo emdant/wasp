@@ -36,7 +36,7 @@ static constexpr WeightT DIST_INF = numeric_limits<WeightT>::max() / 2;
 template <typename GraphT, bool DIRECTED, bool CACHE_LEAVES>
 auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
 #ifdef PAPI_PROFILE
-  PAPI_hl_region_begin("sssp-ws");
+  PAPI_hl_region_begin("sssp");
 #endif
 
   parallel::atomics_array<WeightT> dist(g.num_nodes(), DIST_INF);
@@ -92,7 +92,7 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
   scheduler.run(init_sssp, process_node);
 
 #ifdef PAPI_PROFILE
-  PAPI_hl_region_end("sssp-ws");
+  PAPI_hl_region_end("sssp");
 #endif
   return dist;
 }
@@ -177,10 +177,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Source: " << source << std::endl;
 
     auto SSSPBound = [&cli, source](const WGraph& g) {
-      if (cli.logging_en())
-        return DeltaStep(g, source, cli.delta());
-      else
-        return DeltaStep(g, source, cli.delta());
+      return DeltaStep(g, source, cli.delta());
     };
 
     auto VerifierBound = [source](const WGraph& g, const parallel::atomics_array<WeightT>& dist) {
