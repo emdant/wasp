@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
   WeightedBuilder b(cli);
   WGraph g = b.MakeGraph();
 
-  std::vector<std::atomic<int64_t>> weight_hist((int)4e8);
+  std::vector<std::atomic<float>> weight_hist((int)1162 * 1e6);
   std::atomic<int64_t> num_zeros{0};
 
   std::cout << "starting counting" << std::endl;
@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
     for (WNode wn : g.out_neigh(i)) {
       if (wn.w == 0)
         num_zeros.fetch_add(1);
-      weight_hist[wn.w].fetch_add(1);
+      weight_hist[(int)(wn.w / 1e-6)].fetch_add(1);
     }
   }
 

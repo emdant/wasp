@@ -309,8 +309,14 @@ public:
     t.Start();
     if (num_nodes_ == -1)
       num_nodes_ = FindMaxNodeID(el) + 1;
-    if (needs_weights_)
-      Generator<NodeID_, DestID_, WeightT_>::InsertWeights(el);
+    if (needs_weights_) {
+      if constexpr (!std::is_floating_point_v<WeightT_>) {
+        Generator<NodeID_, DestID_, WeightT_>::InsertWeights(el);
+      } else {
+        std::cout << "Cannot insert weights into floating point graph" << std::endl;
+        exit(-10);
+      }
+    }
     if (in_place_) {
       MakeCSRInPlace(el, &index, &neighs, &inv_index, &inv_neighs);
     } else {
@@ -335,6 +341,13 @@ public:
         Reader<NodeID_, DestID_, WeightT_, invert> r(cli_.filename());
         if ((r.GetSuffix() == ".sg") || (r.GetSuffix() == ".wsg")) {
           return r.ReadSerializedGraph();
+        } else if (r.GetSuffix() == ".pbin") {
+          if constexpr (std::is_same<NodeID_, DestID_>::value) {
+            std::cout << "Cannot read .pbin file into unweighted graph" << std::endl;
+            std::exit(-10);
+          } else {
+            return r.ReadPbinGraph();
+          }
         } else {
           el = r.ReadFile(needs_weights_, symmetrize_);
         }

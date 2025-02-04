@@ -160,7 +160,9 @@ public:
   static void InsertWeights(parallel::vector<EdgePair<NodeID_, NodeID_>>& el) {}
 
   // Overwrites existing weights with random from [1,255]
-  static void InsertWeights(parallel::vector<WEdge>& el) {
+  static void InsertWeights(parallel::vector<WEdge>& el)
+    requires std::is_same_v<WeightT_, NodeID_>
+  {
 #pragma omp parallel
     {
       rng_t_ rng;

@@ -27,7 +27,7 @@ Various helper functions to ease writing of kernels
 
 // Default type signatures for commonly used types
 typedef int32_t NodeID;
-typedef int32_t WeightT;
+typedef float WeightT;
 typedef NodeWeight<NodeID, WeightT> WNode;
 
 typedef CSRGraph<NodeID> Graph;
@@ -108,6 +108,7 @@ void BenchmarkKernel(const CLApp& cli, const GraphT_& g, GraphFunc kernel, Analy
     trial_timer.Stop();
     PrintTime("External Trial Time", trial_timer.Seconds());
     total_seconds += trial_timer.Seconds();
+    std::cout << "M edges/s: " << ((double)g.num_edges() / 1e6) / trial_timer.Seconds() << std::endl;
 
     if (cli.do_analysis() && (iter == (cli.num_trials() - 1)))
       stats(g, result);

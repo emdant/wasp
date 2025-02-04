@@ -34,7 +34,7 @@ using namespace bucketing;
 static constexpr WeightT DIST_INF = numeric_limits<WeightT>::max() / 2;
 
 template <typename GraphT, bool DIRECTED, bool CACHE_LEAVES>
-auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
+auto BestDeltaStepping(const WGraph& g, NodeID source, double delta) {
 #ifdef PAPI_PROFILE
   PAPI_hl_region_begin("sssp");
 #endif
@@ -97,7 +97,7 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
   return dist;
 }
 
-parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32_t delta) {
+parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, double delta) {
 
   if (g.directed())
     return BestDeltaStepping<WGraph, true, true>(g, source, delta);
@@ -116,6 +116,12 @@ void PrintSSSPStats(const WGraph& g, const parallel::atomics_array<WeightT>& dis
       max_dist = dist[i];
 
   cout << "Max dist " << max_dist << endl;
+}
+
+bool approximatelyEqual(WeightT a, WeightT a_ref, double absError = 1e-7, double relError = 1e-5) {
+  if (std::fabs(a - a_ref) <= absError || std::fabs(a - a_ref) <= a_ref * relError)
+    return true;
+  return false;
 }
 
 bool SSSPVerifier(const WGraph& g, NodeID source, const parallel::atomics_array<WeightT>& dist_to_test) {
@@ -145,10 +151,11 @@ bool SSSPVerifier(const WGraph& g, NodeID source, const parallel::atomics_array<
   // Report any mismatches
   bool all_ok = true;
   for (NodeID n : g.vertices()) {
-    if (dist_to_test[n] != dist[n]) {
+    if (!approximatelyEqual(dist_to_test[n], dist[n])) {
       // if (dist_to_test[n] != DIST_INF)
       //   cout << n << ": " << dist_to_test[n] << " != " << dist[n] << endl;
       all_ok = false;
+      break;
     }
   }
   return all_ok;
@@ -170,14 +177,95 @@ int main(int argc, char* argv[]) {
   WGraph g = b.MakeGraph();
   g.PrintStats();
 
+  double sum_weights = 0;
+  WeightT min_nonzero_weight = std::numeric_limits<WeightT>::max(), max_weight = 0;
+  WNode* edges = g.out_index()[0];
+
+#pragma omp parallel for reduction(+ : sum_weights) reduction(max : max_weight) reduction(min : min_nonzero_weight)
+  for (size_t i = 0; i < g.num_edges(); i++) {
+    auto w = edges[i].w;
+    sum_weights += w;
+    max_weight = std::max(max_weight, w);
+    min_nonzero_weight = (w > 0) ? std::min(min_nonzero_weight, w) : min_nonzero_weight;
+  }
+
+  NodeID num_leaves = 0;
+  int64_t max_degree = 0;
+#pragma omp parallel for reduction(+ : num_leaves)
+  for (size_t i = 0; i < g.num_nodes(); i++) {
+    if (g.out_degree(i) == 1) {
+      num_leaves += 1;
+    }
+    max_degree = std::max(max_degree, g.out_degree(i));
+  }
+  double perc_leaves = ((double)num_leaves / g.num_nodes());
+
+  double avg_weight = (double)sum_weights / g.num_edges();
+  double avg_deg = (double)g.num_edges() / g.num_nodes();
+
+  // Sampling weights to estimate median and mean
+  std::mt19937 rng(27491095);
+  std::uniform_int_distribution<int64_t> udist(0, g.num_edges() - 1);
+  int num_samples = 100000;
+  std::vector<WeightT> samples(num_samples);
+  double sampled_sum_weight = 0;
+
+  for (int i = 0; i < num_samples; i++) {
+    samples[i] = edges[udist(rng)].w;
+    sampled_sum_weight += samples[i];
+  }
+
+  std::sort(samples.begin(), samples.end());
+  double sampled_median_weight = samples[num_samples / 2];
+  double sampled_avg_weight = sampled_sum_weight / num_samples;
+
+  double accum = 0;
+  for (int i = 0; i < num_samples; i++) {
+    accum += ((samples[i] - sampled_avg_weight) * (samples[i] - sampled_avg_weight));
+  }
+  double sampled_stddev_weight = std::sqrt(accum / (num_samples - 1));
+  double sampled_skew_weight = (sampled_avg_weight - sampled_median_weight) / sampled_stddev_weight;
+
+  std::cout << "threads: " << max_threads << std::endl
+            << std::endl;
+  std::cout << "N: " << g.num_nodes() << std::endl;
+  std::cout << "M: " << g.num_edges() << std::endl;
+  std::cout << "avg_deg: " << avg_deg << std::endl;
+  std::cout << "max_deg: " << max_degree << std::endl;
+  std::cout << "avg_weight: " << avg_weight << std::endl;
+  std::cout << "max_weight: " << max_weight << std::endl;
+  std::cout << "min_nonzero_weight: " << min_nonzero_weight << std::endl;
+  std::cout << "num_leaves: " << num_leaves << std::endl;
+  std::cout << "% num_leaves: " << perc_leaves * 100 << std::endl
+            << std::endl;
+
+  std::cout << "sampled_median_weight: " << sampled_median_weight << std::endl;
+  std::cout << "sampled_avg_weight: " << sampled_avg_weight << std::endl;
+  std::cout << "sampled_stddev_weight: " << sampled_stddev_weight << std::endl;
+  std::cout << "sampled_skew_weight: " << sampled_skew_weight << std::endl;
+  std::cout << "avg/median weights: " << sampled_avg_weight / sampled_median_weight << std::endl
+            << std::endl;
+
+  double delta = cli.delta();
+  if (cli.use_heuristic()) {
+    bool dense = avg_deg > 8.0;
+    if (dense) { // dense
+      delta = (sampled_median_weight / avg_deg);
+    } else { // sparse
+      delta = (sampled_median_weight / avg_deg) * max_threads;
+    }
+  }
+
+  std::cout << "delta: " << delta << std::endl;
+
   SourcePicker<WGraph> sp(g, cli);
 
   for (auto i = 0; i < cli.num_sources(); i++) {
-    auto source = sp.PickNext();
+    auto source = 0;
     std::cout << "Source: " << source << std::endl;
 
-    auto SSSPBound = [&cli, source](const WGraph& g) {
-      return DeltaStep(g, source, cli.delta());
+    auto SSSPBound = [delta, source](const WGraph& g) {
+      return DeltaStep(g, source, delta);
     };
 
     auto VerifierBound = [source](const WGraph& g, const parallel::atomics_array<WeightT>& dist) {

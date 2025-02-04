@@ -10,6 +10,7 @@
 #include <string>
 #include <type_traits>
 
+#include "graph.h"
 #include "parallel/vector.h"
 #include "util.h"
 
@@ -297,6 +298,52 @@ public:
     t.Stop();
     PrintTime("Read Time", t.Seconds());
     return el;
+  }
+
+  CSRGraph<NodeID_, DestID_, invert> ReadPbinGraph()
+    requires(std::is_same_v<NodeWeight<NodeID_, WeightT_>, DestID_>)
+  {
+    using vidType = unsigned int;
+    using eidType = unsigned long;
+    using weight_type = float;
+
+    std::ifstream file(filename_, std::ios::in | std::ios::binary);
+    if (!file.is_open()) {
+      std::cout << "Couldn't open file " << filename_ << std::endl;
+      std::exit(-4);
+    }
+    Timer t;
+    t.Start();
+    NodeID_ num_nodes, num_edges;
+    file.read(reinterpret_cast<char*>(&num_nodes), sizeof(int64_t));
+    file.read(reinterpret_cast<char*>(&num_edges), sizeof(int64_t));
+
+    DestID_** index = nullptr;
+    DestID_* neighs = new DestID_[num_edges];
+
+    parallel::vector<SGOffset> offsets(num_nodes + 1);
+    vidType* col = new vidType[num_edges];
+    weight_type* weights = new weight_type[num_edges];
+
+    file.read(reinterpret_cast<char*>(offsets.data()), sizeof(eidType) * (num_nodes + 1));
+    file.read(reinterpret_cast<char*>(col), sizeof(vidType) * num_edges);
+    file.read(reinterpret_cast<char*>(weights), sizeof(weight_type) * num_edges);
+
+#pragma omp parallel for
+    for (auto i = 0; i < num_edges; i++) {
+      neighs[i].v = col[i];
+      neighs[i].w = weights[i];
+    }
+    delete[] col;
+    delete[] weights;
+
+    index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, neighs);
+    file.close();
+
+    t.Stop();
+    PrintTime("Read Time", t.Seconds());
+
+    return CSRGraph<NodeID_, DestID_, invert>(num_nodes, index, neighs);
   }
 
   CSRGraph<NodeID_, DestID_, invert> ReadSerializedGraph() {

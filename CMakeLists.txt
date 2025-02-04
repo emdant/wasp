@@ -5,6 +5,7 @@ set (CMAKE_CXX_STANDARD 17)
 
 add_compile_options("-Wno-interference-size")
 add_compile_options("-march=native")
+add_compile_options("-fconcepts")
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   execute_process(COMMAND gcc -print-search-dirs

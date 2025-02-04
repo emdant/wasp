@@ -227,11 +227,13 @@ public:
 template <typename WeightT_>
 class CLDelta : public CLApp {
   WeightT_ delta_ = 1;
+  bool use_heuristic_ = false;
 
 public:
   CLDelta(int argc, char** argv, std::string name) : CLApp(argc, argv, name) {
-    get_args_ += "d:";
+    get_args_ += "d:H:";
     AddHelpLine('d', "d", "delta parameter", std::to_string(delta_));
+    AddHelpLine('H', "H", "use heuristic for delta", std::to_string(use_heuristic_));
   }
 
   void HandleArg(signed char opt, char* opt_arg) override {
@@ -242,12 +244,16 @@ public:
       else
         delta_ = static_cast<WeightT_>(atol(opt_arg));
       break;
+    case 'H':
+      use_heuristic_ = true;
+      break;
     default:
       CLApp::HandleArg(opt, opt_arg);
     }
   }
 
   WeightT_ delta() const { return delta_; }
+  bool use_heuristic() const { return use_heuristic_; }
 };
 
 class CLConvert : public CLBase {
