@@ -6,6 +6,7 @@
 
 #include <vector>
 
+#include "../containers/buckets_bitmap.h"
 #include "base.h"
 #include "bucket.h"
 
@@ -30,20 +31,25 @@ public:
       buckets_.resize(new_size);
     }
 
+    bool was_empty = buckets_[p].empty();
     buckets_[p].push_value(node, p);
+
+    if (was_empty) {
+      bitmap_.set_bucket(p);
+    }
   }
 
   priority_level first_nonempty() {
-    for (auto i = 0; i < buckets_.size(); i++) {
-      if (!buckets_[i].empty()) {
-        return i;
-      }
-    }
-    return EMPTY_BUCKETS;
+    return bitmap_.first_nonempty();
+  }
+
+  void mark_empty(priority_level p) {
+    bitmap_.reset_bucket(p);
   }
 
 private:
   std::vector<bucket<ChunkT>> buckets_;
+  buckets_bitmap bitmap_;
 };
 
 } // namespace bucketing

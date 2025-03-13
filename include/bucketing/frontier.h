@@ -53,6 +53,8 @@ public:
 
     while (!bucket.empty())
       current_bucket_.push(bucket.pop_chunk());
+
+    next_buckets_.mark_empty(p);
   }
 
   inline void set_current(priority_level p) {
