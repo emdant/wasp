@@ -15,10 +15,6 @@
 
 #include "types.h"
 
-unsigned long get_thread_num(void) {
-  return (unsigned long)omp_get_thread_num();
-}
-
 namespace profiling {
 
 template <typename... Types>

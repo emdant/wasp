@@ -13,6 +13,7 @@
 
 #include "builder.h"
 #include "graph.h"
+#include "profiling/papi_helper.h"
 #include "timer.h"
 #include "util.h"
 #include "writer.h"
@@ -108,6 +109,10 @@ void BenchmarkKernel(const CLApp& cli, const GraphT_& g, GraphFunc kernel, Analy
     trial_timer.Stop();
     PrintTime("External Trial Time", trial_timer.Seconds());
     total_seconds += trial_timer.Seconds();
+
+#ifdef PAPI_PROFILE
+    papi_helper::print_values();
+#endif
 
     if (cli.do_analysis() && (iter == (cli.num_trials() - 1)))
       stats(g, result);
