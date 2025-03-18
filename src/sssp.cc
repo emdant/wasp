@@ -26,6 +26,7 @@
 #include "parallel/padded_array.h"
 #include "parallel/vector.h"
 #include "platform_atomics.h"
+#include "profiling.h"
 #include "timer.h"
 
 using namespace std;
@@ -156,7 +157,16 @@ bool SSSPVerifier(const WGraph& g, NodeID source, const parallel::atomics_array<
 
 int main(int argc, char* argv[]) {
 #ifdef PAPI_PROFILE
-  PAPI_library_init(PAPI_VER_CURRENT);
+  int retval;
+  if ((retval = PAPI_library_init(PAPI_VER_CURRENT)) != PAPI_VER_CURRENT) {
+    std::cerr << "PAPI_library_init error: " << retval << std::endl;
+    return -1;
+  }
+
+  if ((retval = PAPI_thread_init(get_thread_num)) != PAPI_OK) {
+    std::cerr << "PAPI_thread_init error: " << retval << std::endl;
+    return -1;
+  }
 #endif
 
   int max_threads = omp_get_max_threads();

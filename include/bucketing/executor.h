@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "omp.h"
+#include "papi.h"
 
 #include "../parallel/padded_array.h"
 #include "../timer.h"
@@ -27,6 +28,34 @@ public:
     {
       int tid = omp_get_thread_num();
       auto& my_frontier = frontiers_[tid];
+
+#ifdef PAPI_PROFILE
+      int event_codes[] = {PAPI_TOT_CYC, PAPI_TOT_INS, PAPI_L1_DCM, PAPI_L2_DCM};
+      int event_set = PAPI_NULL;
+      int retval;
+
+      long long values[4];
+
+      if (retval = PAPI_register_thread() != PAPI_OK) {
+        std::cerr << "PAPI_register_thread error: " << retval << std::endl;
+        exit(1);
+      }
+
+      if ((retval = PAPI_create_eventset(&event_set)) != PAPI_OK) {
+        std::cerr << "PAPI_create_eventset error: " << retval << std::endl;
+        exit(1);
+      }
+
+      if ((retval = PAPI_add_events(event_set, event_codes, 4)) != PAPI_OK) {
+        std::cerr << "PAPI_add_events error: " << retval << std::endl;
+        exit(1);
+      }
+
+      if ((retval = PAPI_start(event_set)) != PAPI_OK) {
+        std::cerr << "PAPI_start error: " << retval << std::endl;
+        exit(1);
+      }
+#endif
 
       if (tid == starting_thread_)
         init_operation(my_frontier);
@@ -89,7 +118,36 @@ public:
             break;
         }
       }
-    }
+
+#ifdef PAPI_PROFILE
+
+      if ((retval = PAPI_stop(event_set, values)) != PAPI_OK) {
+        std::cerr << "PAPI_stop error: " << retval << std::endl;
+        exit(1);
+      }
+
+      if ((retval = PAPI_cleanup_eventset(event_set)) != PAPI_OK) {
+        std::cerr << "PAPI_cleanup_eventset error: " << retval << std::endl;
+        exit(1);
+      }
+
+      if ((retval = PAPI_destroy_eventset(&event_set)) != PAPI_OK) {
+        std::cerr << "PAPI_destroy_eventset error: " << retval << std::endl;
+        exit(1);
+      }
+
+#pragma omp critical
+      {
+        std::cout << "Thread " << tid << " PAPI results:" << std::endl;
+        std::cout << "Total cycles: " << values[0] << std::endl;
+        std::cout << "Total instructions: " << values[1] << std::endl;
+        std::cout << "L1 data cache misses: " << values[2] << std::endl;
+        std::cout << "L2 data cache misses: " << values[3] << std::endl;
+      }
+
+#endif
+
+    } // end parallel region
   }
 
 private:

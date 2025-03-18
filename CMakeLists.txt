@@ -6,6 +6,8 @@ set (CMAKE_CXX_STANDARD 17)
 add_compile_options("-Wno-interference-size")
 add_compile_options("-march=native")
 
+link_libraries("-lnuma")
+
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   execute_process(COMMAND gcc -print-search-dirs
     OUTPUT_VARIABLE gcc_install_dir
@@ -52,5 +54,6 @@ add_executable(stats utils/stats.cc)
 add_executable(weight utils/weight.cc)
 add_executable(degree utils/degree.cc)
 add_executable(read utils/read.cc)
+add_executable(threads utils/threads_info.cc)
 
 add_subdirectory(tests)
