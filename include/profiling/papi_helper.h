@@ -25,8 +25,30 @@ private:
       exit(1);
     }
 
+    const PAPI_hw_info_t* hw_info = nullptr;
+    if ((hw_info = PAPI_get_hardware_info()) == NULL) {
+      std::cerr << "PAPI_get_hardware_info error: " << retval << std::endl;
+      exit(1);
+    }
+
+    bool intel = false, amd = false;
+    std::string vendor = hw_info->vendor_string;
+    if (vendor.find("Intel") != std::string::npos)
+      intel = true;
+    else if (vendor.find("AMD") != std::string::npos)
+      amd = true;
+    else {
+      std::cerr << "CPU vendor not supported" << std::endl;
+      exit(1);
+    }
+
     char code_name[PAPI_MAX_STR_LEN];
-    int default_events[] = {PAPI_TOT_CYC, PAPI_TOT_INS, PAPI_L1_DCM, PAPI_L2_DCM};
+    int default_events[] = {
+        PAPI_TOT_CYC,
+        PAPI_TOT_INS,
+        // PAPI_L1_DCM,
+        // PAPI_L2_DCM
+    };
 
     for (auto i = 0; i < std::size(default_events); i++) {
       if ((retval = PAPI_event_code_to_name(default_events[i], code_name)) != PAPI_OK) {
@@ -41,6 +63,32 @@ private:
 
       supported_events_.push_back(default_events[i]);
       supported_names_.push_back(code_name);
+    }
+
+    if (intel) {
+      const char* intel_native_events[] = {
+          // "LONGEST_LAT_CACHE.MISS",
+          "LLC_MISSES",
+          "MEM_LOAD_L3_MISS_RETIRED:LOCAL_DRAM",
+          "MEM_LOAD_L3_MISS_RETIRED:REMOTE_DRAM",
+          "MEM_LOAD_L3_MISS_RETIRED:REMOTE_FWD",
+          "MEM_LOAD_L3_MISS_RETIRED:REMOTE_HITM",
+      };
+      for (auto i = 0; i < std::size(intel_native_events); i++) {
+        int event_code;
+        if ((retval = PAPI_event_name_to_code(intel_native_events[i], &event_code)) != PAPI_OK) {
+          std::cerr << "PAPI_event_name_to_code error: " << retval << " for native event " << intel_native_events[i] << std::endl;
+          exit(1);
+        }
+
+        if ((retval = PAPI_query_event(event_code) != PAPI_OK)) {
+          std::cerr << "PAPI event not supported: " << intel_native_events[i] << std::endl;
+          continue;
+        }
+
+        supported_events_.push_back(event_code);
+        supported_names_.push_back(intel_native_events[i]);
+      }
     }
 
     if (supported_events_.empty()) {
