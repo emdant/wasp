@@ -13,10 +13,13 @@
 
 #include "builder.h"
 #include "graph.h"
-#include "profiling/papi_helper.h"
 #include "timer.h"
 #include "util.h"
 #include "writer.h"
+
+#ifdef PAPI_PROFILE
+#include "profiling/papi_helper.h"
+#endif
 
 /*
 GAP Benchmark Suite
