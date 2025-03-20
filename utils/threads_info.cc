@@ -66,6 +66,6 @@ int main() {
   }
 
   for (int i = 0; i < max_threads; i++) {
-    // cout << threads_info[i] << endl;
+    cout << threads_info[i] << endl;
   }
 }
