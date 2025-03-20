@@ -48,8 +48,8 @@ private:
     int default_events[] = {
         PAPI_TOT_CYC,
         PAPI_TOT_INS,
-        // PAPI_L1_DCM,
-        // PAPI_L2_DCM
+        PAPI_L1_DCM,
+        PAPI_L2_DCM
     };
 
     for (auto i = 0; i < std::size(default_events); i++) {
@@ -95,6 +95,29 @@ private:
       }
 
       derived_events_.push_back("MEM_LOAD_L3_MISS_RETIRED");
+    }
+
+    if (amd) {
+      // const char* amd_native_events[] = {
+      //    "LLC-LOAD-MISSES",
+      //    "NODE-LOAD-MISSES",
+      //    "NODE-STORE-MISSES",
+      // };
+      // for (auto i = 0; i < std::size(amd_native_events); i++) {
+      //   int event_code;
+      //   if ((retval = PAPI_event_name_to_code(amd_native_events[i], &event_code)) != PAPI_OK) {
+      //     std::cerr << "PAPI_event_name_to_code error: " << retval << " for native event " << amd_native_events[i] << std::endl;
+      //     exit(1);
+      //   }
+
+      //   if ((retval = PAPI_query_event(event_code) != PAPI_OK)) {
+      //     std::cerr << "PAPI event not supported: " << amd_native_events[i] << std::endl;
+      //     continue;
+      //   }
+
+      //   supported_events_.push_back(event_code);
+      //   supported_names_.push_back(amd_native_events[i]);
+      // }
     }
 
     if (supported_events_.empty()) {

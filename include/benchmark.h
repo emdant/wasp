@@ -115,6 +115,7 @@ void BenchmarkKernel(const CLApp& cli, const GraphT_& g, GraphFunc kernel, Analy
     std::cout << "M edges/s: " << ((double)g.num_edges() / 1e6) / trial_timer.Seconds() << std::endl;
 
 #ifdef PAPI_PROFILE
+    papi_helper::print_perthread_values();
     papi_helper::print_values();
 #endif
 
