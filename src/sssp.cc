@@ -13,7 +13,7 @@
 
 #include "omp.h"
 #ifdef PAPI_PROFILE
-#include "papi.h"
+#include "profiling/papi_helper.h"
 #endif
 
 #include "benchmark.h"
@@ -26,6 +26,7 @@
 #include "parallel/padded_array.h"
 #include "parallel/vector.h"
 #include "platform_atomics.h"
+#include "profiling.h"
 #include "timer.h"
 
 using namespace std;
@@ -35,10 +36,6 @@ static constexpr WeightT DIST_INF = numeric_limits<WeightT>::max() / 2;
 
 template <typename GraphT, bool DIRECTED, bool CACHE_LEAVES>
 auto BestDeltaStepping(const WGraph& g, NodeID source, double delta) {
-#ifdef PAPI_PROFILE
-  PAPI_hl_region_begin("sssp");
-#endif
-
   parallel::atomics_array<WeightT> dist(g.num_nodes(), DIST_INF);
   dist[source] = 0;
 
@@ -91,9 +88,6 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, double delta) {
   };
   scheduler.run(init_sssp, process_node);
 
-#ifdef PAPI_PROFILE
-  PAPI_hl_region_end("sssp");
-#endif
   return dist;
 }
 
@@ -163,7 +157,7 @@ bool SSSPVerifier(const WGraph& g, NodeID source, const parallel::atomics_array<
 
 int main(int argc, char* argv[]) {
 #ifdef PAPI_PROFILE
-  PAPI_library_init(PAPI_VER_CURRENT);
+  papi_helper::initialize();
 #endif
 
   int max_threads = omp_get_max_threads();

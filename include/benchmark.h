@@ -17,6 +17,10 @@
 #include "util.h"
 #include "writer.h"
 
+#ifdef PAPI_PROFILE
+#include "profiling/papi_helper.h"
+#endif
+
 /*
 GAP Benchmark Suite
 File:   Benchmark
@@ -109,6 +113,10 @@ void BenchmarkKernel(const CLApp& cli, const GraphT_& g, GraphFunc kernel, Analy
     PrintTime("External Trial Time", trial_timer.Seconds());
     total_seconds += trial_timer.Seconds();
     std::cout << "M edges/s: " << ((double)g.num_edges() / 1e6) / trial_timer.Seconds() << std::endl;
+
+#ifdef PAPI_PROFILE
+    papi_helper::print_values();
+#endif
 
     if (cli.do_analysis() && (iter == (cli.num_trials() - 1)))
       stats(g, result);

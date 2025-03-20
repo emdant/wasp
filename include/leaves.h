@@ -66,4 +66,27 @@ private:
   bitmap leaves;
 };
 
+template <typename GraphT>
+class is_leaf<GraphT, true, false> {
+public:
+  is_leaf(const GraphT& g) : g_(g) {}
+
+  bool operator()(NodeID n) const {
+    auto in_deg = g_.in_degree(n);
+    auto out_deg = g_.out_degree(n);
+    if (in_deg == 1 && out_deg == 0)
+      return true;
+    else if (in_deg == 1 && out_deg == 1) {
+      NodeID in_src = (NodeID)g_.in_index()[n][0];
+      NodeID out_dst = (NodeID)g_.out_index()[n][0];
+      if (in_src == out_dst)
+        return true;
+    }
+    return false;
+  }
+
+private:
+  const GraphT& g_;
+};
+
 #endif // LEAVES_H_

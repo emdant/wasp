@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "omp.h"
+
 #include "types.h"
 
 namespace profiling {
