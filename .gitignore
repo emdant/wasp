@@ -17,6 +17,7 @@ benchmark/graphs/*.wsg
 benchmark/graphs/raw/*
 
 .vscode
+.cache
 
 profiling/parsed
 profiling/plots
