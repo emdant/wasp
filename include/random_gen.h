@@ -6,8 +6,6 @@
 
 #include <cstdint>
 
-#include "alignment.h"
-
 /* This is xoshiro256++ 1.0, one of our all-purpose, rock-solid generators.
    It has excellent (sub-ns) speed, a state (256 bits) that is large
    enough for any parallel application, and it passes all tests we are
@@ -20,7 +18,7 @@
    output to fill s. */
 class xoshiro {
 private:
-  alignas(hardware_destructive_interference_size) std::uint64_t s[4];
+  std::uint64_t s[4];
 
   inline std::uint64_t rotl(const std::uint64_t x, int k) const {
     return (x << k) | (x >> (64 - k));

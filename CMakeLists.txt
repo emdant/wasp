@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.18)
 
 project(wasp)
 set (CMAKE_CXX_STANDARD 17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_compile_options("-Wno-interference-size")
 add_compile_options("-march=native")
@@ -21,10 +22,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   add_compile_options("--gcc-install-dir=${gcc_install_dir}")
 endif()
 
-find_package(OpenMP)
-if(OpenMP_CXX_FOUND)
-  link_libraries(OpenMP::OpenMP_CXX)
-endif()
+find_package(OpenMP REQUIRED)
+link_libraries(OpenMP::OpenMP_CXX)
 
 include_directories(include)
 

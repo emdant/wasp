@@ -5,7 +5,6 @@
 #define GRAPH_H_
 
 #include <algorithm>
-#include <cinttypes>
 #include <cstddef>
 #include <iostream>
 #include <type_traits>

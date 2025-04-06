@@ -6,12 +6,12 @@
 
 #include <algorithm>
 #include <cassert>
-#include <cinttypes>
 #include <limits>
 #include <random>
 
 #include "graph.h"
 #include "parallel/vector.h"
+#include "timer.h"
 #include "util.h"
 
 /*

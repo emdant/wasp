@@ -5,7 +5,6 @@
 #define BENCHMARK_H_
 
 #include <algorithm>
-#include <cinttypes>
 #include <functional>
 #include <random>
 #include <utility>

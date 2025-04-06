@@ -4,8 +4,6 @@
 #ifndef BUCKETING_BUCKET_H
 #define BUCKETING_BUCKET_H
 
-#include <list>
-
 #include "base.h"
 
 namespace bucketing {

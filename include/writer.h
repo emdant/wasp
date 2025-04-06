@@ -4,9 +4,9 @@
 #ifndef WRITER_H_
 #define WRITER_H_
 
-#include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <type_traits>
 

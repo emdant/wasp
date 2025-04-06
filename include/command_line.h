@@ -5,9 +5,6 @@
 #define COMMAND_LINE_H_
 
 #include <getopt.h>
-
-#include <algorithm>
-#include <cinttypes>
 #include <iostream>
 #include <string>
 #include <type_traits>

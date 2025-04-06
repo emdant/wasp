@@ -5,12 +5,8 @@
 #define BUCKETING_FRONTIER_H_
 
 #include <atomic>
-#include <limits>
-#include <memory>
-#include <vector>
 
 #include "base.h"
-#include "bucket.h"
 #include "current_bucket.h"
 #include "next_buckets.h"
 

@@ -5,8 +5,6 @@
 #define BUILDER_H_
 
 #include <algorithm>
-#include <cinttypes>
-#include <fstream>
 #include <functional>
 #include <type_traits>
 #include <utility>

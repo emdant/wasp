@@ -9,8 +9,6 @@
 #include <stdio.h>
 #include <string>
 
-#include "timer.h"
-
 /*
 GAP Benchmark Suite
 Author: Scott Beamer
@@ -26,11 +24,11 @@ Miscellaneous helpers that don't fit into classes
 
 #define IS_POW2(x)
 
-bool is_pow2(std::uint32_t x) {
+inline bool is_pow2(std::uint32_t x) {
   return ((x & (x - 1)) == 0);
 }
 
-std::uint32_t next_pow2(std::uint32_t x) {
+inline std::uint32_t next_pow2(std::uint32_t x) {
   x--;
   x |= x >> 1;
   x |= x >> 2;
