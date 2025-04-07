@@ -3,10 +3,8 @@
 // See LICENSE.txt for license details
 
 #include <algorithm>
-#include <cinttypes>
 #include <iostream>
 #include <limits>
-#include <map>
 #include <optional>
 #include <queue>
 #include <vector>
@@ -18,16 +16,10 @@
 
 #include "benchmark.h"
 #include "bucketing/executor.h"
-#include "builder.h"
+#include "bucketing/frontier.h"
 #include "command_line.h"
-#include "graph.h"
 #include "leaves.h"
 #include "parallel/atomics_array.h"
-#include "parallel/padded_array.h"
-#include "parallel/vector.h"
-#include "platform_atomics.h"
-#include "profiling.h"
-#include "timer.h"
 
 using namespace std;
 using namespace bucketing;
@@ -41,7 +33,7 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
 
   executor scheduler;
 
-  const auto init_sssp = [&](executor::frontier& my_frontier) {
+  const auto init_sssp = [&](bucketing::chunks_frontier& my_frontier) {
     my_frontier.push(source, 0);
   };
 
@@ -69,7 +61,7 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
 
   is_leaf<WGraph, DIRECTED, CACHE_LEAVES> is_leaf(g);
 
-  const auto process_node = [&](executor::frontier& my_frontier, const NodeID u, const priority_level bucket) {
+  const auto process_node = [&](bucketing::chunks_frontier& my_frontier, const NodeID u, const priority_level bucket) {
     if (dist[u].load(std::memory_order_relaxed) >= delta * bucket) {
       if constexpr (!DIRECTED) {
         if (g.out_degree(u) < hardware_constructive_interference_size / sizeof(WNode))

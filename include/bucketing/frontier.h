@@ -36,7 +36,7 @@ public:
     return current_.load(std::memory_order_acquire);
   }
 
-  inline priority_level next_priority_level() {
+  inline priority_level next_priority_level() const {
     return next_buckets_.first_nonempty();
   }
 
@@ -60,6 +60,8 @@ private:
   current_bucket<ChunkT> current_bucket_;
   next_buckets<ChunkT> next_buckets_;
 };
+
+using chunks_frontier = bucketing::frontier<nodes_chunk>;
 
 }; // namespace bucketing
 

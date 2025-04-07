@@ -2,31 +2,21 @@
 // Copyright (c) 2015, The Regents of the University of California (Regents)
 // See LICENSE.txt for license details
 
-#include <algorithm>
-#include <cinttypes>
 #include <iostream>
 #include <limits>
-#include <map>
 #include <optional>
-#include <queue>
 #include <vector>
 
-#include "omp.h"
 #ifdef PAPI_PROFILE
 #include "papi.h"
 #endif
 
 #include "benchmark.h"
 #include "bucketing/executor.h"
-#include "builder.h"
 #include "command_line.h"
-#include "graph.h"
 #include "leaves.h"
 #include "parallel/atomics_array.h"
-#include "parallel/padded_array.h"
 #include "parallel/vector.h"
-#include "platform_atomics.h"
-#include "timer.h"
 
 using namespace std;
 using namespace bucketing;
@@ -49,7 +39,7 @@ parallel::atomics_array<bfs_pair> BestBFS(const GraphT& g, NodeID source, int32_
   executor scheduler;
   is_leaf<GraphT, DIRECTED, CACHE_LEAVES> is_leaf(g);
 
-  const auto init_bfs = [&](executor::frontier& my_frontier) {
+  const auto init_bfs = [&](bucketing::chunks_frontier& my_frontier) {
     my_frontier.push(source, 0);
   };
 
@@ -64,7 +54,7 @@ parallel::atomics_array<bfs_pair> BestBFS(const GraphT& g, NodeID source, int32_
     return std::nullopt;
   };
 
-  const auto process_node = [&](executor::frontier& my_frontier, const NodeID u, const priority_level bucket) {
+  const auto process_node = [&](bucketing::chunks_frontier& my_frontier, const NodeID u, const priority_level bucket) {
     if (bfs_tree[u].load(std::memory_order_relaxed).level >= delta * bucket) {
       for (NodeID v : g.out_neigh(u)) {
         if (auto level = visit_edge(u, v)) {

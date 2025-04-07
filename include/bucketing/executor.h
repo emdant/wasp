@@ -13,6 +13,7 @@
 #endif
 
 #include "../parallel/padded_array.h"
+#include "bucketing/base.h"
 #include "frontier.h"
 
 namespace bucketing {
@@ -142,7 +143,7 @@ private:
   static constexpr inline int starting_thread_ = 0;
 
   int num_threads_;
-  parallel::padded_array<frontier> frontiers_;
+  parallel::padded_array<chunks_frontier> frontiers_;
 };
 
 } // namespace bucketing

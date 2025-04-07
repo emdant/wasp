@@ -33,7 +33,7 @@ public:
     buckets_[p].push_value(node, p);
   }
 
-  priority_level first_nonempty() {
+  priority_level first_nonempty() const {
     for (auto i = 0; i < buckets_.size(); i++) {
       if (!buckets_[i].empty()) {
         return i;
