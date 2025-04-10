@@ -15,14 +15,15 @@
 #include "../parallel/padded_array.h"
 #include "bucketing/base.h"
 #include "frontier.h"
+#include "numa/numa_distance_map.h"
 
 namespace bucketing {
 
 class executor {
 public:
-  using frontier = bucketing::frontier<nodes_chunk>;
-
-  executor() : num_threads_(omp_get_max_threads()), frontiers_(num_threads_) {}
+  executor()
+      : num_threads_(omp_get_max_threads()),
+        frontiers_(num_threads_) {}
 
   template <typename InitOpT, typename ProcessOpT>
   inline void run(InitOpT init_operation, ProcessOpT process_operation) {
@@ -30,6 +31,9 @@ public:
     {
       int tid = omp_get_thread_num();
       auto& my_frontier = frontiers_[tid];
+      int num_dist = numa_distance_map::get_num_distances();
+      std::vector<nodes_chunk*> stolen_chunks;
+      stolen_chunks.reserve(num_threads_);
 
 #ifdef PAPI_PROFILE
       int event_set = PAPI_NULL;
@@ -69,22 +73,22 @@ public:
             process_operation(my_frontier, u, bucket);
           }
 
-          std::vector<nodes_chunk*> stolen_chunks;
-          stolen_chunks.reserve(num_threads_);
-
           auto next_bucket = my_frontier.next_priority_level();
           priority_level min = next_bucket;
-          for (auto i = (tid + 1) % num_threads_; i != tid; i = (i + 1) % num_threads_) {
-            if (frontiers_[i].current_priority_level() <= next_bucket) {
-              auto chunk = frontiers_[i].steal();
-              if (chunk != nullptr) {
-                min = std::min(min, chunk->priority);
-                stolen_chunks.push_back(chunk);
+
+          for (auto d = 0; d < num_dist && stolen_chunks.empty(); d++) {
+            auto victims = numa_distance_map::get_threads_at_distance(tid, d);
+            for (const auto victim : victims) {
+              if (frontiers_[victim].current_priority_level() <= next_bucket) {
+                auto chunk = frontiers_[victim].steal();
+                if (chunk != nullptr) {
+                  min = std::min(min, chunk->priority);
+                  stolen_chunks.push_back(chunk);
+                }
               }
             }
           }
 
-          // Processing stolen chunks
           if (!stolen_chunks.empty()) {
             my_frontier.set_current(min);
 
@@ -96,7 +100,9 @@ public:
               }
               delete chunk;
             }
+            stolen_chunks.clear();
           }
+
         } while (!my_frontier.current_empty());
 
         auto next_bucket = my_frontier.next_priority_level();
@@ -143,6 +149,7 @@ private:
   static constexpr inline int starting_thread_ = 0;
 
   int num_threads_;
+  int num_numa_nodes_;
   parallel::padded_array<chunks_frontier> frontiers_;
 };
 

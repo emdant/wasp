@@ -145,6 +145,7 @@ int main(int argc, char* argv[]) {
   papi_helper::initialize();
 #endif
 
+  numa_distance_map::initialize();
   int max_threads = omp_get_max_threads();
   cout << "OMP max threads: " << max_threads << endl;
 

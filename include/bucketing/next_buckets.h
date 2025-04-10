@@ -33,6 +33,16 @@ public:
     buckets_[p].push_value(node, p);
   }
 
+  void push(nodes_chunk* chunk, priority_level p) {
+    if (p >= buckets_.size()) {
+      auto new_size = buckets_.size();
+      new_size = std::max(static_cast<priority_level>(new_size) * 2, p + 1);
+      buckets_.resize(new_size);
+    }
+
+    buckets_[p].push_chunk(chunk);
+  }
+
   priority_level first_nonempty() const {
     for (auto i = 0; i < buckets_.size(); i++) {
       if (!buckets_[i].empty()) {

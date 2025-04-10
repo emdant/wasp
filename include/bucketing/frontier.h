@@ -24,6 +24,15 @@ public:
     next_buckets_.push(node, priority);
   }
 
+  inline void push(nodes_chunk* chunk) {
+    if (current_.load(std::memory_order_relaxed) == chunk->priority) {
+      current_bucket_.push(chunk);
+      return;
+    }
+
+    next_buckets_.push(chunk, chunk->priority);
+  }
+
   inline std::optional<node_prio> pop() {
     return current_bucket_.pop();
   }
