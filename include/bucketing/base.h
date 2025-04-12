@@ -18,6 +18,8 @@ constexpr inline priority_level EMPTY_BUCKETS = std::numeric_limits<std::int64_t
 struct node_prio {
   NodeID node;
   priority_level bucket;
+  std::int64_t begin;
+  std::int64_t end;
 };
 
 using nodes_chunk = containers::chunk<NodeID, priority_level, 64>;

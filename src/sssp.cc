@@ -3,12 +3,14 @@
 // See LICENSE.txt for license details
 
 #include <algorithm>
+#include <cstdint>
 #include <iostream>
 #include <limits>
 #include <optional>
 #include <queue>
 #include <vector>
 
+#include "bucketing/base.h"
 #include "omp.h"
 #ifdef PAPI_PROFILE
 #include "profiling/papi_helper.h"
@@ -28,6 +30,7 @@ static constexpr WeightT DIST_INF = numeric_limits<WeightT>::max() / 2;
 
 template <typename GraphT, bool DIRECTED, bool CACHE_LEAVES>
 auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
+  int num_threads = omp_get_max_threads();
   parallel::atomics_array<WeightT> dist(g.num_nodes(), DIST_INF);
   dist[source] = 0;
 
@@ -44,6 +47,7 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
       if (dist[wv.v].compare_exchange_weak(old_dist, new_dist, std::memory_order_acq_rel, std::memory_order_acquire)) {
         return new_dist;
       }
+      // new_dist = dist[u].load(std::memory_order_acquire) + wv.w;
     }
     return std::nullopt;
   };
@@ -60,17 +64,42 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
   };
 
   is_leaf<WGraph, DIRECTED, CACHE_LEAVES> is_leaf(g);
+  constexpr std::int64_t MAX_DEG = 1 << 15;
 
-  const auto process_node = [&](bucketing::chunks_frontier& my_frontier, const NodeID u, const priority_level bucket) {
+  const auto inspect_node = [&](bucketing::chunks_frontier& my_frontier, const priority_level bucket, const NodeID u) {
     if (dist[u].load(std::memory_order_relaxed) >= delta * bucket) {
+      auto deg = g.out_degree(u);
+      if (deg < MAX_DEG)
+        return std::pair{0, deg};
+
+      int64_t neighs_per_thread = deg / num_threads;
+      int64_t step = neighs_per_thread <= MAX_DEG ? neighs_per_thread : MAX_DEG;
+      auto begin = step;
+      while (begin < deg) {
+        auto chunk = new nodes_chunk(u, bucket, begin, std::min(begin + step, deg));
+        my_frontier.push(chunk);
+        begin += step;
+      }
+      return std::pair{0, step};
+    }
+    return std::pair{0, MAX_DEG}; // whatever - won't be processed
+  };
+
+  const auto process_node = [&](bucketing::chunks_frontier& my_frontier, const priority_level bucket, const NodeID u, const std::int64_t begin, const std::int64_t end) {
+    if (dist[u].load(std::memory_order_relaxed) >= delta * bucket) {
+
+      auto edges = g.out_index()[u];
+
       if constexpr (!DIRECTED) {
-        if (g.out_degree(u) < hardware_constructive_interference_size / sizeof(WNode))
-          for (WNode wn : g.out_neigh(u)) {
+        if ((end - begin) < hardware_constructive_interference_size / sizeof(WNode))
+          for (auto i = begin; i < end; i++) {
+            WNode wn = edges[i];
             relax_pull_safe(wn, u);
           }
       }
 
-      for (WNode wn : g.out_neigh(u)) {
+      for (auto i = begin; i < end; i++) {
+        WNode wn = edges[i];
         if (auto new_prio = relax_push(u, wn)) {
           if (!is_leaf(wn.v))
             my_frontier.push(wn.v, new_prio.value() / delta);
@@ -78,7 +107,7 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
       }
     }
   };
-  scheduler.run(init_sssp, process_node);
+  scheduler.run(init_sssp, inspect_node, process_node);
 
   return dist;
 }

@@ -25,8 +25,8 @@ public:
       : num_threads_(omp_get_max_threads()),
         frontiers_(num_threads_) {}
 
-  template <typename InitOpT, typename ProcessOpT>
-  inline void run(InitOpT init_operation, ProcessOpT process_operation) {
+  template <typename InitOpT, typename InspectOpT, typename ProcessOpT>
+  inline void run(InitOpT init_operation, InspectOpT inspect_operation, ProcessOpT process_operation) {
 #pragma omp parallel
     {
       int tid = omp_get_thread_num();
@@ -68,9 +68,18 @@ public:
         // Using do-while so non-starting threads will try to steal first
         do {
           // Process current bucket
-          for (auto node_pair = my_frontier.pop(); node_pair; node_pair = my_frontier.pop()) {
-            auto [u, bucket] = node_pair.value();
-            process_operation(my_frontier, u, bucket);
+          for (auto chunk = my_frontier.pop(); chunk; chunk = my_frontier.pop()) {
+            if (chunk->begin == 0 && chunk->end == 0) {
+              while (!chunk->empty()) {
+                auto u = chunk->pop_front();
+                auto [begin, end] = inspect_operation(my_frontier, chunk->priority, u);
+                process_operation(my_frontier, chunk->priority, u, begin, end);
+              }
+            } else {
+              auto u = chunk->pop_front();
+              process_operation(my_frontier, chunk->priority, u, chunk->begin, chunk->end);
+            }
+            delete chunk;
           }
 
           auto next_bucket = my_frontier.next_priority_level();
@@ -94,15 +103,20 @@ public:
 
             for (auto i = 0; i < stolen_chunks.size(); i++) {
               auto& chunk = stolen_chunks[i];
-              while (!chunk->empty()) {
+              if (chunk->begin == 0 && chunk->end == 0) {
+                while (!chunk->empty()) {
+                  auto u = chunk->pop_front();
+                  auto [begin, end] = inspect_operation(my_frontier, chunk->priority, u);
+                  process_operation(my_frontier, chunk->priority, u, begin, end);
+                }
+              } else {
                 auto u = chunk->pop_front();
-                process_operation(my_frontier, u, chunk->priority);
+                process_operation(my_frontier, chunk->priority, u, chunk->begin, chunk->end);
               }
               delete chunk;
             }
             stolen_chunks.clear();
           }
-
         } while (!my_frontier.current_empty());
 
         auto next_bucket = my_frontier.next_priority_level();

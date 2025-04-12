@@ -40,6 +40,15 @@ public:
     data_[0] = value;
     tail_++;
   }
+  chunk(DataT value, PrioT priority, std::int64_t begin, std::int64_t end)
+      : head_(0),
+        tail_(0),
+        priority(priority),
+        begin(begin),
+        end(end) {
+    data_[0] = value;
+    tail_++;
+  }
 
   chunk(chunk&) = delete;
   chunk(chunk&&) = delete;
@@ -80,6 +89,8 @@ private:
 public:
   PrioT priority;
   chunk* next = nullptr;
+  std::int64_t begin = 0;
+  std::int64_t end = 0;
 
 private:
   DataT data_[N];

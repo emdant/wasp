@@ -14,6 +14,10 @@ class bitmap {
 public:
   explicit bitmap(std::size_t n) : bits(new unsigned int[(n + INT_BITS - 1) >> INT_LOG]()) {}
 
+  ~bitmap() {
+    delete[] bits;
+  }
+
   inline bool test(std::size_t i) const {
     return ((bits[i >> INT_LOG] >> i) & 1) != 0;
   }
