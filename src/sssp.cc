@@ -47,7 +47,7 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
       if (dist[wv.v].compare_exchange_weak(old_dist, new_dist, std::memory_order_acq_rel, std::memory_order_acquire)) {
         return new_dist;
       }
-      // new_dist = dist[u].load(std::memory_order_acquire) + wv.w;
+      new_dist = dist[u].load(std::memory_order_acquire) + wv.w;
     }
     return std::nullopt;
   };
@@ -64,50 +64,46 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
   };
 
   is_leaf<WGraph, DIRECTED, CACHE_LEAVES> is_leaf(g);
-  constexpr std::int64_t MAX_DEG = 1 << 15;
+  constexpr std::int64_t MAX_DEG = 1 << 20;
+
+  const auto is_stale = [&](const priority_level bucket, const NodeID u) {
+    return dist[u].load(std::memory_order_relaxed) < delta * bucket;
+  };
 
   const auto inspect_node = [&](bucketing::chunks_frontier& my_frontier, const priority_level bucket, const NodeID u) {
-    if (dist[u].load(std::memory_order_relaxed) >= delta * bucket) {
-      auto deg = g.out_degree(u);
-      if (deg < MAX_DEG)
-        return std::pair{0, deg};
+    auto deg = g.out_degree(u);
+    if (deg < MAX_DEG)
+      return std::pair{0, deg};
 
-      int64_t neighs_per_thread = deg / num_threads;
-      int64_t step = neighs_per_thread <= MAX_DEG ? neighs_per_thread : MAX_DEG;
-      auto begin = step;
-      while (begin < deg) {
-        auto chunk = new nodes_chunk(u, bucket, begin, std::min(begin + step, deg));
-        my_frontier.push(chunk);
-        begin += step;
-      }
-      return std::pair{0, step};
+    auto begin = MAX_DEG;
+    while (begin < deg) {
+      auto chunk = new nodes_chunk(u, bucket, begin, std::min(begin + MAX_DEG, deg));
+      my_frontier.push(chunk);
+      begin += MAX_DEG;
     }
-    return std::pair{0, MAX_DEG}; // whatever - won't be processed
+    return std::pair{0, MAX_DEG};
   };
 
   const auto process_node = [&](bucketing::chunks_frontier& my_frontier, const priority_level bucket, const NodeID u, const std::int64_t begin, const std::int64_t end) {
-    if (dist[u].load(std::memory_order_relaxed) >= delta * bucket) {
+    auto edges = g.out_index()[u];
 
-      auto edges = g.out_index()[u];
-
-      if constexpr (!DIRECTED) {
-        if ((end - begin) < hardware_constructive_interference_size / sizeof(WNode))
-          for (auto i = begin; i < end; i++) {
-            WNode wn = edges[i];
-            relax_pull_safe(wn, u);
-          }
-      }
-
-      for (auto i = begin; i < end; i++) {
-        WNode wn = edges[i];
-        if (auto new_prio = relax_push(u, wn)) {
-          if (!is_leaf(wn.v))
-            my_frontier.push(wn.v, new_prio.value() / delta);
+    if constexpr (!DIRECTED) {
+      if ((end - begin) < hardware_constructive_interference_size / sizeof(WNode))
+        for (auto i = begin; i < end; i++) {
+          WNode wn = edges[i];
+          relax_pull_safe(wn, u);
         }
+    }
+
+    for (auto i = begin; i < end; i++) {
+      WNode wn = edges[i];
+      if (auto new_prio = relax_push(u, wn)) {
+        if (!is_leaf(wn.v))
+          my_frontier.push(wn.v, new_prio.value() / delta);
       }
     }
   };
-  scheduler.run(init_sssp, inspect_node, process_node);
+  scheduler.run(init_sssp, is_stale, inspect_node, process_node);
 
   return dist;
 }

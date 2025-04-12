@@ -26,12 +26,12 @@ public:
       return;
     }
 
-    if (!head_->full()) {
+    if (!head_->full() && head_->end == 0) {
       head_->push_back(value);
       return;
     }
 
-    // Chunk is full
+    // Chunk is full or is a node chunk
     auto chunk = new ChunkT(value, p, head_);
     head_ = chunk;
     n_++;

@@ -25,8 +25,8 @@ public:
       : num_threads_(omp_get_max_threads()),
         frontiers_(num_threads_) {}
 
-  template <typename InitOpT, typename InspectOpT, typename ProcessOpT>
-  inline void run(InitOpT init_operation, InspectOpT inspect_operation, ProcessOpT process_operation) {
+  template <typename InitOpT, typename StaleOpT, typename InspectOpT, typename ProcessOpT>
+  inline void run(InitOpT init_operation, StaleOpT stale, InspectOpT inspect_operation, ProcessOpT process_operation) {
 #pragma omp parallel
     {
       int tid = omp_get_thread_num();
@@ -68,18 +68,16 @@ public:
         // Using do-while so non-starting threads will try to steal first
         do {
           // Process current bucket
-          for (auto chunk = my_frontier.pop(); chunk; chunk = my_frontier.pop()) {
-            if (chunk->begin == 0 && chunk->end == 0) {
-              while (!chunk->empty()) {
-                auto u = chunk->pop_front();
-                auto [begin, end] = inspect_operation(my_frontier, chunk->priority, u);
-                process_operation(my_frontier, chunk->priority, u, begin, end);
+          for (auto node_pair = my_frontier.pop(); node_pair; node_pair = my_frontier.pop()) {
+            auto [u, bucket, c_begin, c_end] = node_pair.value();
+            if (!stale(bucket, u)) {
+              if (c_begin == 0 && c_end == 0) {
+                auto [begin, end] = inspect_operation(my_frontier, bucket, u);
+                process_operation(my_frontier, bucket, u, begin, end);
+              } else {
+                process_operation(my_frontier, bucket, u, c_begin, c_end);
               }
-            } else {
-              auto u = chunk->pop_front();
-              process_operation(my_frontier, chunk->priority, u, chunk->begin, chunk->end);
             }
-            delete chunk;
           }
 
           auto next_bucket = my_frontier.next_priority_level();
@@ -106,12 +104,15 @@ public:
               if (chunk->begin == 0 && chunk->end == 0) {
                 while (!chunk->empty()) {
                   auto u = chunk->pop_front();
-                  auto [begin, end] = inspect_operation(my_frontier, chunk->priority, u);
-                  process_operation(my_frontier, chunk->priority, u, begin, end);
+                  if (!stale(chunk->priority, u)) {
+                    auto [begin, end] = inspect_operation(my_frontier, chunk->priority, u);
+                    process_operation(my_frontier, chunk->priority, u, begin, end);
+                  }
                 }
               } else {
                 auto u = chunk->pop_front();
-                process_operation(my_frontier, chunk->priority, u, chunk->begin, chunk->end);
+                if (!stale(chunk->priority, u))
+                  process_operation(my_frontier, chunk->priority, u, chunk->begin, chunk->end);
               }
               delete chunk;
             }

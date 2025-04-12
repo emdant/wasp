@@ -29,11 +29,10 @@ public:
       current_bucket_.push(chunk);
       return;
     }
-
     next_buckets_.push(chunk, chunk->priority);
   }
 
-  inline ChunkT* pop() {
+  inline std::optional<node_prio> pop() {
     return current_bucket_.pop();
   }
 

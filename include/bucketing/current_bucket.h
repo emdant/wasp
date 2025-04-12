@@ -38,17 +38,29 @@ public:
     deque_.push(chunk);
   }
 
-  ChunkT* pop() {
-    auto chunk = deque_.pop();
-    if (chunk != nullptr)
-      return chunk;
-
+  std::optional<node_prio> pop() {
     if (local_chunk_ != nullptr) {
-      auto chunk = std::exchange(local_chunk_, nullptr);
-      return chunk;
+      node_prio ret{local_chunk_->pop_front(), local_chunk_->priority, local_chunk_->begin, local_chunk_->end};
+
+      if (local_chunk_->empty()) {
+        delete std::exchange(local_chunk_, nullptr);
+      }
+
+      return std::move(ret);
     }
 
-    return nullptr;
+    local_chunk_ = deque_.pop();
+    if (local_chunk_ != nullptr) {
+      node_prio ret{local_chunk_->pop_front(), local_chunk_->priority, local_chunk_->begin, local_chunk_->end};
+
+      if (local_chunk_->empty()) {
+        delete std::exchange(local_chunk_, nullptr);
+      }
+      return std::move(ret);
+    }
+
+    // deque was empty
+    return std::nullopt;
   }
 
   ChunkT* steal() {
