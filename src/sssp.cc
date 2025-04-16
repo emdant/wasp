@@ -12,6 +12,11 @@
 
 #include "bucketing/base.h"
 #include "omp.h"
+
+#ifdef COUNT_RELAX
+#include "parallel/padded_array.h"
+#endif
+
 #ifdef PAPI_PROFILE
 #include "profiling/papi_helper.h"
 #endif
@@ -33,7 +38,9 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
   int num_threads = omp_get_max_threads();
   parallel::atomics_array<WeightT> dist(g.num_nodes(), DIST_INF);
   dist[source] = 0;
-
+#ifdef COUNT_RELAX
+  parallel::padded_array<size_t> visits(num_threads, 0);
+#endif
   executor scheduler;
 
   const auto init_sssp = [&](bucketing::chunks_frontier& my_frontier) {
@@ -86,10 +93,15 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
 
   const auto process_node = [&](bucketing::chunks_frontier& my_frontier, const priority_level bucket, const NodeID u, const std::int64_t begin, const std::int64_t end) {
     auto edges = g.out_index()[u];
-
+#ifdef COUNT_RELAX
+    auto tid = omp_get_thread_num();
+#endif
     if constexpr (!DIRECTED) {
       if ((end - begin) < hardware_constructive_interference_size / sizeof(WNode))
         for (auto i = begin; i < end; i++) {
+#ifdef COUNT_RELAX
+          visits[tid]++;
+#endif
           WNode wn = edges[i];
           relax_pull_safe(wn, u);
         }
@@ -97,6 +109,9 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
 
     for (auto i = begin; i < end; i++) {
       WNode wn = edges[i];
+#ifdef COUNT_RELAX
+      visits[tid]++;
+#endif
       if (auto new_prio = relax_push(u, wn)) {
         if (!is_leaf(wn.v))
           my_frontier.push(wn.v, new_prio.value() / delta);
@@ -105,6 +120,12 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
   };
   scheduler.run(init_sssp, is_stale, inspect_node, process_node);
 
+#ifdef COUNT_RELAX
+  size_t total = 0;
+  for (auto i = 0; i < num_threads; i++)
+    total += visits[i];
+  cout << "Number of relaxations: " << total << endl;
+#endif
   return dist;
 }
 

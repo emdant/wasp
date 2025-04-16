@@ -69,6 +69,10 @@ public:
     return std::chrono::duration_cast<std::chrono::duration<double, std::micro>>(total_).count();
   }
 
+  void Reset() {
+    total_ = std::chrono::duration<double>::zero();
+  }
+
 private:
   std::chrono::high_resolution_clock::time_point start_time_;
   std::chrono::duration<double> total_{};

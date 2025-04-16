@@ -42,6 +42,11 @@ if (LINK_PAPI)
   endif()
 endif()
 
+option(COUNT_RELAX "Count the number of relaxations during SSSP" OFF)
+if (COUNT_RELAX)
+  add_compile_definitions(COUNT_RELAX)
+endif()
+
 
 add_executable(dijkstra src/dijkstra.cc)
 add_executable(sssp src/sssp.cc)
