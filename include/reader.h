@@ -10,6 +10,7 @@
 #include <string>
 #include <type_traits>
 
+#include "graph.h"
 #include "parallel/vector.h"
 #include "util.h"
 

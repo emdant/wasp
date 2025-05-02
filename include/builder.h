@@ -133,6 +133,11 @@ public:
   // Side effect: neighbor IDs will be sorted
   void SquishCSR(const CSRGraph<NodeID_, DestID_, invert>& g, bool transpose, DestID_*** sq_index, DestID_** sq_neighs) {
     parallel::vector<NodeID_> diffs(g.num_nodes());
+    size_t total_self_edges = 0;
+    size_t total_redundant_edges = 0;
+    parallel::vector<size_t> local_self_edges(g.num_nodes(), 0);
+    parallel::vector<size_t> local_redundant_edges(g.num_nodes(), 0);
+
     DestID_ *n_start, *n_end;
 #pragma omp parallel for private(n_start, n_end)
     for (NodeID_ n = 0; n < g.num_nodes(); n++) {
@@ -143,11 +148,36 @@ public:
         n_start = g.out_neigh(n).begin();
         n_end = g.out_neigh(n).end();
       }
+
+      size_t original_size = n_end - n_start;
+
+      // Sort the adjacency list
       std::sort(n_start, n_end);
+
+      // Remove duplicate edges and count them
       DestID_* new_end = std::unique(n_start, n_end);
-      new_end = std::remove(n_start, new_end, n);
-      diffs[n] = new_end - n_start;
+      size_t after_unique_size = new_end - n_start;
+      local_redundant_edges[n] = original_size - after_unique_size;
+
+      // Count and remove self-loops
+      DestID_* after_remove = std::remove(n_start, new_end, n);
+      local_self_edges[n] = new_end - after_remove;
+
+      // Store the new size
+      diffs[n] = after_remove - n_start;
     }
+
+// Sum up the self and redundant edges counts
+#pragma omp parallel for reduction(+ : total_self_edges, total_redundant_edges)
+    for (NodeID_ n = 0; n < g.num_nodes(); n++) {
+      total_self_edges += local_self_edges[n];
+      total_redundant_edges += local_redundant_edges[n];
+    }
+
+    // Print the results
+    std::cout << "Number of self edges removed: " << total_self_edges << std::endl;
+    std::cout << "Number of redundant edges removed: " << total_redundant_edges << std::endl;
+
     parallel::vector<SGOffset> sq_offsets = ParallelPrefixSum(diffs);
     *sq_neighs = new DestID_[sq_offsets[g.num_nodes()]];
     *sq_index = CSRGraph<NodeID_, DestID_>::GenIndex(sq_offsets, *sq_neighs);
