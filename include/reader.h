@@ -12,6 +12,7 @@
 
 #include "graph.h"
 #include "parallel/vector.h"
+#include "timer.h"
 #include "util.h"
 
 /*

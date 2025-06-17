@@ -1,13 +1,8 @@
 // Copyright (c) 2015, The Regents of the University of California (Regents)
 // See LICENSE.txt for license details
 
-#include <iostream>
-
 #include "benchmark.h"
-#include "builder.h"
 #include "command_line.h"
-#include "graph.h"
-#include "writer.h"
 
 using namespace std;
 

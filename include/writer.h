@@ -38,22 +38,28 @@ public:
     constexpr size_t THRESHOLD = size_t(1) << 32; // 4 GiB
     std::stringstream buffer;
 
+    // MM header
     buffer << "\%\%MatrixMarket matrix coordinate ";
     if constexpr (std::is_same_v<NodeID_, DestID_>)
-      buffer << "pattern";
+      buffer << "pattern ";
     else if constexpr (std::is_integral_v<typename DestID_::WeightT>)
-      buffer << "integer";
+      buffer << "integer ";
     else
       buffer << "real";
-    buffer << " general";
-    buffer << std::endl;
-    auto num_edges = g_.directed() ? g_.num_edges() : g_.num_edges() * 2;
-    buffer << g_.num_nodes() << " " << g_.num_nodes() << " " << num_edges << std::endl;
 
-    // will print double the number of undirected edges for undirected graphs
+    if (g_.directed())
+      buffer << "general";
+    else
+      buffer << "symmetric";
+    buffer << std::endl;
+
+    // M x N x NNZ
+    buffer << g_.num_nodes() << " " << g_.num_nodes() << " " << g_.num_edges() << std::endl;
+
     for (NodeID_ u = 0; u < g_.num_nodes(); u++) {
       for (DestID_ v : g_.out_neigh(u))
-        buffer << u + 1 << " " << v + 1 << std::endl;
+        if (g_.directed() || u < v)
+          buffer << u + 1 << " " << v + 1 << std::endl;
 
       if ((size_t)buffer.tellp() >= THRESHOLD) {
         out << buffer.rdbuf();
