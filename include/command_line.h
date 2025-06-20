@@ -115,6 +115,7 @@ public:
   bool symmetrize() const { return symmetrize_; }
   bool uniform() const { return uniform_; }
   bool in_place() const { return in_place_; }
+  void set_filename(std::string filename) { filename_ = filename; }
 };
 
 class CLApp : public CLBase {
