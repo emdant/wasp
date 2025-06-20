@@ -3,7 +3,6 @@
 #include <thread>
 #include <vector>
 
-#include "omp.h"
 #include "parallel/deque.h"
 
 using namespace std;
