@@ -182,7 +182,7 @@ public:
 
   // Note: converts vertex numbering from 1..N to 0..N-1
   // Note: weights casted to type WeightT_
-  EdgeList ReadInMTX(std::ifstream& in, bool& needs_weights, bool symmetrize) {
+  EdgeList ReadInMTX(std::ifstream& in, bool& needs_weights, bool& symmetrize) {
     EdgeList el;
     std::string start, object, format, field, symmetry, line;
     in >> start >> object >> format >> field >> symmetry >> std::ws;
@@ -207,8 +207,9 @@ public:
       std::cout << "unrecognized field type for .mtx" << std::endl;
       std::exit(-24);
     }
-    bool undirected;
+    bool undirected; // unused
     if (symmetry == "symmetric") {
+      symmetrize = true; // MakeCSR will automatically symmetrize the edges
       undirected = true;
     } else if ((symmetry == "general") || (symmetry == "skew-symmetric")) {
       undirected = false;
@@ -242,9 +243,6 @@ public:
         edge_stream >> v;
         v.v -= 1;
         el.push_back(Edge(u - 1, v));
-        if (undirected && !symmetrize) {
-          el.push_back(Edge(v.v, NodeWeight<NodeID_, WeightT_>(u - 1, v.w)));
-        }
       } else if (read_weights && (field == "real")) {
         NodeWeight<NodeID_, float> v;
         edge_stream >> v;
@@ -252,22 +250,17 @@ public:
         v.w *= 1e8;
         NodeWeight<NodeID_, WeightT_> v_trunc(v.v, v.w);
         el.push_back(Edge(u - 1, v_trunc));
-        if (undirected && !symmetrize) {
-          el.push_back(Edge(v.v, NodeWeight<NodeID_, WeightT_>(u - 1, v.w)));
-        }
       } else {
         NodeID_ v;
         edge_stream >> v;
         el.push_back(Edge(u - 1, v - 1));
-        if (undirected && !symmetrize)
-          el.push_back(Edge(v - 1, u - 1));
       }
     }
     needs_weights = !read_weights;
     return el;
   }
 
-  EdgeList ReadFile(bool& needs_weights, bool symmetrize) {
+  EdgeList ReadFile(bool& needs_weights, bool& symmetrize) {
     Timer t;
     t.Start();
     EdgeList el;
