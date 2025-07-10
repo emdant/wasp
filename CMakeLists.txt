@@ -54,9 +54,9 @@ endif()
 
 option(COUNT_RELAX "Count the number of relaxations during SSSP" OFF)
 if (COUNT_RELAX)
-  add_compile_definitions(COUNT_RELAX)
+  add_executable(sssp-crelax src/sssp.cc)
+  target_compile_definitions(sssp-crelax PRIVATE COUNT_RELAX)
 endif()
-
 
 add_executable(dijkstra src/dijkstra.cc)
 add_executable(sssp src/sssp.cc)
