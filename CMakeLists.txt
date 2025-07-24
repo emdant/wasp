@@ -53,21 +53,40 @@ if (LINK_PAPI)
 endif()
 
 option(COUNT_RELAX "Count the number of relaxations during SSSP" OFF)
+option(COMPILE_UTILS "Enable the compilation of utilities" OFF)
+
+set(TYPES int32 float)
+
+function(create_typed_target TARGET_NAME SOURCE_FILE)
+  add_custom_target(${TARGET_NAME})
+
+  foreach(TYPE ${TYPES})
+    set(TYPED_TARGET ${TARGET_NAME}-${TYPE})
+    
+    add_executable(${TYPED_TARGET} ${SOURCE_FILE})
+    string(TOUPPER ${TYPE} UPPER_TYPE)
+    target_compile_definitions(${TYPED_TARGET} PRIVATE USE_${UPPER_TYPE})
+    
+    add_dependencies(${TARGET_NAME} ${TYPED_TARGET})
+  endforeach()
+endfunction()
+
 if (COUNT_RELAX)
-  add_executable(sssp-crelax src/sssp.cc)
-  target_compile_definitions(sssp-crelax PRIVATE COUNT_RELAX)
+  create_typed_target(sssp-crelax src/sssp.cc)
+  foreach(TYPE ${TYPES})
+    target_compile_definitions(sssp-crelax-${TYPE} PRIVATE COUNT_RELAX)
+  endforeach()
 endif()
 
-add_executable(dijkstra src/dijkstra.cc)
-add_executable(sssp src/sssp.cc)
+create_typed_target(dijkstra src/dijkstra.cc)
+create_typed_target(sssp src/sssp.cc)
 # add_executable(bfs src/bfs.cc)
 
-option(COMPILE_UTILS "Enable the compilation of utilities" OFF)
 if (COMPILE_UTILS)
-add_executable(converter utils/converter.cc)
-add_executable(weight utils/weight.cc)
-add_executable(degree utils/degree.cc)
-add_executable(check-graph utils/check-graph.cc)
+create_typed_target(converter utils/converter.cc)
+create_typed_target(weight utils/weight.cc)
+create_typed_target(degree utils/degree.cc)
+create_typed_target(check-graph utils/check-graph.cc)
 endif()
 
 option(COMPILE_TESTS "Enable the compilation of tests" OFF)

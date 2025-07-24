@@ -30,7 +30,13 @@ Various helper functions to ease writing of kernels
 
 // Default type signatures for commonly used types
 typedef int32_t NodeID;
+#if defined(USE_INT32)
 typedef int32_t WeightT;
+#elif defined(USE_FLOAT)
+typedef float WeightT;
+#else // fallback to int32 if we do not care about weights
+typedef int32_t WeightT;
+#endif
 typedef NodeWeight<NodeID, WeightT> WNode;
 
 typedef CSRGraph<NodeID> Graph;
