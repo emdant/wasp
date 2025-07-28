@@ -45,7 +45,7 @@ public:
     else if constexpr (std::is_integral_v<typename DestID_::WeightT>)
       buffer << "integer ";
     else
-      buffer << "real";
+      buffer << "real ";
 
     if (g_.directed())
       buffer << "general";
