@@ -123,7 +123,7 @@ public:
   }
 
   // Note: converts vertex numbering from 1..N to 0..N-1
-  EdgeList ReadInMetis(std::ifstream& in, bool& needs_weights) {
+  EdgeList ReadInMetis(std::ifstream& in, bool& needs_weights, bool override_weights) {
     EdgeList el;
     NodeID_ num_nodes, num_edges;
     char c;
@@ -176,13 +176,14 @@ public:
         u++;
       }
     }
-    needs_weights = !read_weights;
+    if (!override_weights)
+      needs_weights = !read_weights;
     return el;
   }
 
   // Note: converts vertex numbering from 1..N to 0..N-1
   // Note: weights casted to type WeightT_
-  EdgeList ReadInMTX(std::ifstream& in, bool& needs_weights, bool& symmetrize) {
+  EdgeList ReadInMTX(std::ifstream& in, bool& needs_weights, bool& symmetrize, bool override_weights) {
     EdgeList el;
     std::string start, object, format, field, symmetry, line;
     in >> start >> object >> format >> field >> symmetry >> std::ws;
@@ -256,11 +257,12 @@ public:
         el.push_back(Edge(u - 1, v - 1));
       }
     }
-    needs_weights = !read_weights;
+    if (!override_weights)
+      needs_weights = !read_weights;
     return el;
   }
 
-  EdgeList ReadFile(bool& needs_weights, bool& symmetrize) {
+  EdgeList ReadFile(bool& needs_weights, bool& symmetrize, bool override_weights) {
     Timer t;
     t.Start();
     EdgeList el;
@@ -273,15 +275,16 @@ public:
     if (suffix == ".el") {
       el = ReadInEL(file);
     } else if (suffix == ".wel") {
-      needs_weights = false;
+      if (!override_weights)
+        needs_weights = false;
       el = ReadInWEL(file);
     } else if (suffix == ".gr") {
       needs_weights = false;
       el = ReadInGR(file);
     } else if (suffix == ".graph") {
-      el = ReadInMetis(file, needs_weights);
+      el = ReadInMetis(file, needs_weights, override_weights);
     } else if (suffix == ".mtx") {
-      el = ReadInMTX(file, needs_weights, symmetrize);
+      el = ReadInMTX(file, needs_weights, symmetrize, override_weights);
     } else if (suffix == ".mtxel") {
       el = ReadInMTXEL(file);
     } else {

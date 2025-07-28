@@ -27,7 +27,7 @@ protected:
   int argc_;
   char** argv_;
   std::string name_;
-  std::string get_args_ = "f:g:hk:su:m";
+  std::string get_args_ = "f:g:hk:su:mo";
   std::vector<std::string> help_strings_;
 
   int scale_ = -1;
@@ -36,6 +36,7 @@ protected:
   bool symmetrize_ = false;
   bool uniform_ = false;
   bool in_place_ = false;
+  bool override_weights_ = false;
 
   void AddHelpLine(char opt, std::string opt_arg, std::string text, std::string def = "") {
     const int kBufLen = 100;
@@ -57,6 +58,7 @@ public:
     AddHelpLine('u', "scale", "generate 2^scale uniform-random graph");
     AddHelpLine('k', "degree", "average degree for synthetic graph", std::to_string(degree_));
     AddHelpLine('m', "", "reduces memory usage during graph building", "false");
+    AddHelpLine('o', "", "override existing weights with generated ones", "false");
   }
 
   bool ParseArgs() {
@@ -98,6 +100,9 @@ public:
     case 'm':
       in_place_ = true;
       break;
+    case 'o':
+      override_weights_ = true;
+      break;
     }
   }
 
@@ -116,6 +121,7 @@ public:
   bool uniform() const { return uniform_; }
   bool in_place() const { return in_place_; }
   void set_filename(std::string filename) { filename_ = filename; }
+  bool override_weights() const { return override_weights_; }
 };
 
 class CLApp : public CLBase {
@@ -253,16 +259,14 @@ class CLConvert : public CLBase {
   std::string out_filename_ = "";
   Format format_;
   bool out_weighted_ = false;
-  bool override_weights_ = false;
 
 public:
   CLConvert(int argc, char** argv, std::string name)
       : CLBase(argc, argv, name) {
-    get_args_ += "e:b:M:wo";
+    get_args_ += "e:b:M:w";
     AddHelpLine('b', "file", "output serialized graph to file");
     AddHelpLine('e', "file", "output edge list to file");
     AddHelpLine('M', "file", "output matrix market to file");
-    AddHelpLine('o', "", "override existing weights with generated ones", "false");
     AddHelpLine('w', "", "make output weighted");
   }
 
@@ -283,9 +287,6 @@ public:
     case 'w':
       out_weighted_ = true;
       break;
-    case 'o':
-      override_weights_ = true;
-      break;
     default:
       CLBase::HandleArg(opt, opt_arg);
     }
@@ -296,7 +297,6 @@ public:
   }
   bool out_weighted() const { return out_weighted_; }
   Format format() const { return format_; }
-  bool override_weights() const { return override_weights_; }
 };
 
 class CLStats : public CLBase {

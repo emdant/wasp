@@ -37,6 +37,7 @@ class BuilderBase {
 
   const CLBase& cli_;
   bool symmetrize_;
+  bool override_weights_ = false;
   bool needs_weights_;
   bool in_place_ = false;
   int64_t num_nodes_ = -1;
@@ -44,6 +45,7 @@ class BuilderBase {
 public:
   explicit BuilderBase(const CLBase& cli) : cli_(cli) {
     symmetrize_ = cli_.symmetrize();
+    override_weights_ = cli_.override_weights();
     needs_weights_ = !std::is_same<NodeID_, DestID_>::value;
     in_place_ = cli_.in_place();
     if (in_place_ && needs_weights_) {
@@ -374,7 +376,7 @@ public:
         if ((r.GetSuffix() == ".sg") || (r.GetSuffix() == ".wsg")) {
           return r.ReadSerializedGraph();
         } else {
-          el = r.ReadFile(needs_weights_, symmetrize_);
+          el = r.ReadFile(needs_weights_, symmetrize_, needs_weights_);
         }
       } else if (cli_.scale() != -1) {
         Generator<NodeID_, DestID_> gen(cli_.scale(), cli_.degree());
