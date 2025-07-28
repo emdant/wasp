@@ -251,17 +251,19 @@ public:
 class CLConvert : public CLBase {
 
   std::string out_filename_ = "";
-  bool out_weighted_ = false;
   Format format_;
+  bool out_weighted_ = false;
+  bool override_weights_ = false;
 
 public:
   CLConvert(int argc, char** argv, std::string name)
       : CLBase(argc, argv, name) {
-    get_args_ += "e:b:M:w";
+    get_args_ += "e:b:M:wo";
     AddHelpLine('b', "file", "output serialized graph to file");
     AddHelpLine('e', "file", "output edge list to file");
     AddHelpLine('M', "file", "output matrix market to file");
-    AddHelpLine('w', "file", "make output weighted");
+    AddHelpLine('o', "", "override existing weights with generated ones", "false");
+    AddHelpLine('w', "", "make output weighted");
   }
 
   void HandleArg(signed char opt, char* opt_arg) override {
@@ -281,14 +283,20 @@ public:
     case 'w':
       out_weighted_ = true;
       break;
+    case 'o':
+      override_weights_ = true;
+      break;
     default:
       CLBase::HandleArg(opt, opt_arg);
     }
   }
 
-  std::string out_filename() const { return out_filename_; }
+  std::string out_filename() const {
+    return out_filename_;
+  }
   bool out_weighted() const { return out_weighted_; }
   Format format() const { return format_; }
+  bool override_weights() const { return override_weights_; }
 };
 
 class CLStats : public CLBase {

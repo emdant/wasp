@@ -6,6 +6,8 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
+#include <cstdint>
 #include <limits>
 #include <random>
 
@@ -60,7 +62,13 @@ private:
   uNodeID_ cutoff_;
 };
 
-template <typename NodeID_, typename DestID_ = NodeID_, typename WeightT_ = NodeID_, typename uNodeID_ = typename std::make_unsigned<NodeID_>::type, int uNodeID_bits_ = std::numeric_limits<uNodeID_>::digits, typename rng_t_ = typename std::conditional<(uNodeID_bits_ == 32), std::mt19937, std::mt19937_64>::type>
+template <
+    typename NodeID_,
+    typename DestID_ = NodeID_,
+    typename WeightT_ = NodeID_,
+    typename uNodeID_ = typename std::make_unsigned<NodeID_>::type,
+    int uNodeID_bits_ = std::numeric_limits<uNodeID_>::digits,
+    typename rng_t_ = typename std::conditional<(uNodeID_bits_ == 32), std::mt19937, std::mt19937_64>::type>
 class Generator {
   typedef EdgePair<NodeID_, DestID_> Edge;
   typedef EdgePair<NodeID_, NodeWeight<NodeID_, WeightT_>> WEdge;
@@ -157,10 +165,10 @@ public:
     return el;
   }
 
-  static void InsertWeights(parallel::vector<EdgePair<NodeID_, NodeID_>>& el) {}
+  static void InsertWeightsGAP(parallel::vector<EdgePair<NodeID_, NodeID_>>& el) {}
 
   // Overwrites existing weights with random from [1,255]
-  static void InsertWeights(parallel::vector<WEdge>& el) {
+  static void InsertWeightsGAP(parallel::vector<WEdge>& el) {
 #pragma omp parallel
     {
       rng_t_ rng;
@@ -171,6 +179,28 @@ public:
         rng.seed(kRandSeed + block / block_size);
         for (int64_t e = block; e < std::min(block + block_size, el_size); e++) {
           el[e].v.w = static_cast<WeightT_>(udist() + 1);
+        }
+      }
+    }
+  }
+
+  static void InsertWeightsGaussian(parallel::vector<EdgePair<NodeID_, NodeID_>>& el, int32_t num_nodes, int64_t num_edges) {}
+
+  // Weights are generated with a Gaussian distribution with mean 1.0 and stddev sqrt(V/E)
+  static void InsertWeightsGaussian(parallel::vector<WEdge>& el, int32_t num_nodes, int64_t num_edges) {
+#pragma omp parallel
+    {
+      rng_t_ rng;
+      std::normal_distribution<WeightT_> ndist(
+          static_cast<WeightT_>(1.0),
+          static_cast<WeightT_>(std::sqrt(static_cast<double>(num_nodes) / num_edges))
+      );
+      int64_t el_size = el.size();
+#pragma omp for
+      for (int64_t block = 0; block < el_size; block += block_size) {
+        rng.seed(kRandSeed + block / block_size);
+        for (int64_t e = block; e < std::min(block + block_size, el_size); e++) {
+          el[e].v.w = static_cast<WeightT_>(ndist(rng));
         }
       }
     }

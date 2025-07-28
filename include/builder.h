@@ -337,8 +337,17 @@ public:
     t.Start();
     if (num_nodes_ == -1)
       num_nodes_ = FindMaxNodeID(el) + 1;
-    if (needs_weights_)
-      Generator<NodeID_, DestID_, WeightT_>::InsertWeights(el);
+
+    if (needs_weights_) {
+      if constexpr (std::is_integral_v<WeightT_>) {
+        Generator<NodeID_, DestID_, WeightT_>::InsertWeightsGAP(el);
+
+      } else if constexpr (std::is_floating_point_v<WeightT_>) {
+        // By using el.size(), we are counting "undirected edges" if the graph is undirected
+        Generator<NodeID_, DestID_, WeightT_>::InsertWeightsGaussian(el, num_nodes_, el.size());
+      }
+    }
+
     if (in_place_) {
       MakeCSRInPlace(el, &index, &neighs, &inv_index, &inv_neighs);
     } else {
@@ -355,7 +364,8 @@ public:
       return CSRGraph<NodeID_, DestID_, invert>(num_nodes_, index, neighs, inv_index, inv_neighs);
   }
 
-  CSRGraph<NodeID_, DestID_, invert> MakeGraph() {
+  CSRGraph<NodeID_, DestID_, invert>
+  MakeGraph() {
     CSRGraph<NodeID_, DestID_, invert> g;
     { // extra scope to trigger earlier deletion of el (save memory)
       EdgeList el;
