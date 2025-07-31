@@ -336,16 +336,19 @@ public:
     DestID_ **index = nullptr, **inv_index = nullptr;
     DestID_ *neighs = nullptr, *inv_neighs = nullptr;
     Timer t;
+    std::cout << "Making CSR from edge list" << std::endl;
     t.Start();
     if (num_nodes_ == -1)
       num_nodes_ = FindMaxNodeID(el) + 1;
 
     if (needs_weights_) {
       if constexpr (std::is_integral_v<WeightT_>) {
+        std::cout << "Generating integer weights for edge list" << std::endl;
         Generator<NodeID_, DestID_, WeightT_>::InsertWeightsGAP(el);
 
       } else if constexpr (std::is_floating_point_v<WeightT_>) {
         // By using el.size(), we are counting "undirected edges" if the graph is undirected
+        std::cout << "Generating float weights for edge list" << std::endl;
         Generator<NodeID_, DestID_, WeightT_>::InsertWeightsGaussian(el, num_nodes_, el.size());
       }
     }
@@ -376,7 +379,7 @@ public:
         if ((r.GetSuffix() == ".sg") || (r.GetSuffix() == ".wsg")) {
           return r.ReadSerializedGraph();
         } else {
-          el = r.ReadFile(needs_weights_, symmetrize_, needs_weights_);
+          el = r.ReadFile(needs_weights_, symmetrize_, override_weights_);
         }
       } else if (cli_.scale() != -1) {
         Generator<NodeID_, DestID_> gen(cli_.scale(), cli_.degree());

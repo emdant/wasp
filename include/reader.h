@@ -199,6 +199,7 @@ public:
       std::cout << "do not support complex weights for .mtx" << std::endl;
       std::exit(-23);
     }
+
     bool read_weights;
     if (field == "pattern") {
       read_weights = false;
@@ -208,6 +209,7 @@ public:
       std::cout << "unrecognized field type for .mtx" << std::endl;
       std::exit(-24);
     }
+
     bool undirected; // unused
     if (symmetry == "symmetric") {
       symmetrize = true; // MakeCSR will automatically symmetrize the edges
@@ -218,6 +220,7 @@ public:
       std::cout << "unsupported symmetry type for .mtx" << std::endl;
       std::exit(-25);
     }
+
     while (true) {
       char c = in.peek();
       if (c == '%') {
@@ -226,6 +229,7 @@ public:
         break;
       }
     }
+
     int64_t m, n, nonzeros;
     in >> m >> n >> nonzeros >> std::ws;
     if (m != n) {
@@ -233,30 +237,25 @@ public:
       std::cout << "matrix must be square for .mtx" << std::endl;
       std::exit(-26);
     }
+
     while (std::getline(in, line)) {
       if (line.empty())
         continue;
       std::istringstream edge_stream(line);
       NodeID_ u;
       edge_stream >> u;
-      if (read_weights && (field == "integer")) {
+      if (read_weights) {
         NodeWeight<NodeID_, WeightT_> v;
         edge_stream >> v;
         v.v -= 1;
         el.push_back(Edge(u - 1, v));
-      } else if (read_weights && (field == "real")) {
-        NodeWeight<NodeID_, float> v;
-        edge_stream >> v;
-        v.v -= 1;
-        v.w *= 1e8;
-        NodeWeight<NodeID_, WeightT_> v_trunc(v.v, v.w);
-        el.push_back(Edge(u - 1, v_trunc));
       } else {
         NodeID_ v;
         edge_stream >> v;
         el.push_back(Edge(u - 1, v - 1));
       }
     }
+
     if (!override_weights)
       needs_weights = !read_weights;
     return el;
@@ -272,6 +271,7 @@ public:
       std::cout << "Couldn't open file " << filename_ << std::endl;
       std::exit(-2);
     }
+    std::cout << "Reading file: " << filename_ << std::endl;
     if (suffix == ".el") {
       el = ReadInEL(file);
     } else if (suffix == ".wel") {
@@ -311,10 +311,10 @@ public:
       std::cout << ".wsg only allowed for weighted graphs" << std::endl;
       std::exit(-5);
     }
-    if (weighted && !std::is_same<WeightT_, SGID>::value) {
-      std::cout << ".wsg only allowed for int32_t weights" << std::endl;
-      std::exit(-5);
-    }
+    // if (weighted && !std::is_same<WeightT_, SGID>::value) {
+    //   std::cout << ".wsg only allowed for int32_t weights" << std::endl;
+    //   std::exit(-5);
+    // }
     std::ifstream file(filename_);
     if (!file.is_open()) {
       std::cout << "Couldn't open file " << filename_ << std::endl;

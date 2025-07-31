@@ -50,14 +50,17 @@ static const int64_t kRandSeed = 27491095;
 
 void PrintLabel(const std::string& label, const std::string& val) {
   printf("%-21s%7s\n", (label + ":").c_str(), val.c_str());
+  fflush(stdout);
 }
 
 void PrintTime(const std::string& s, double seconds) {
   printf("%-21s%3.5lf\n", (s + ":").c_str(), seconds);
+  fflush(stdout);
 }
 
 void PrintStep(const std::string& s, int64_t count) {
   printf("%-14s%14" PRId64 "\n", (s + ":").c_str(), count);
+  fflush(stdout);
 }
 
 void PrintStep(const std::string& s, double seconds, int64_t count = -1) {
@@ -65,10 +68,12 @@ void PrintStep(const std::string& s, double seconds, int64_t count = -1) {
     printf("%5s%11" PRId64 "  %10.5lf\n", s.c_str(), count, seconds);
   else
     printf("%5s%23.5lf\n", s.c_str(), seconds);
+  fflush(stdout);
 }
 
 void PrintStep(int step, double seconds, int64_t count = -1) {
   PrintStep(std::to_string(step), seconds, count);
+  fflush(stdout);
 }
 
 // Runs op and prints the time it took to execute labelled by label

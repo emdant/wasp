@@ -74,11 +74,11 @@ public:
       std::cout << "serialized graphs only allowed for 32b IDs" << std::endl;
       std::exit(-4);
     }
-    if (!std::is_same<DestID_, NodeID_>::value &&
-        !std::is_same<DestID_, NodeWeight<NodeID_, SGID>>::value) {
-      std::cout << ".wsg only allowed for int32_t weights" << std::endl;
-      std::exit(-8);
-    }
+    // if (!std::is_same<DestID_, NodeID_>::value &&
+    //     !std::is_same<DestID_, NodeWeight<NodeID_, SGID>>::value) {
+    //   std::cout << ".wsg only allowed for int32_t weights" << std::endl;
+    //   std::exit(-8);
+    // }
     bool directed = g_.directed();
     SGOffset num_nodes = g_.num_nodes();
     SGOffset edges_to_write = g_.num_edges_directed();
