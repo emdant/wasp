@@ -341,17 +341,17 @@ public:
     if (num_nodes_ == -1)
       num_nodes_ = FindMaxNodeID(el) + 1;
 
-    if (needs_weights_) {
-      if constexpr (std::is_integral_v<WeightT_>) {
-        std::cout << "Generating integer weights for edge list" << std::endl;
-        Generator<NodeID_, DestID_, WeightT_>::InsertWeightsGAP(el);
-
-      } else if constexpr (std::is_floating_point_v<WeightT_>) {
-        // By using el.size(), we are counting "undirected edges" if the graph is undirected
-        std::cout << "Generating float weights for edge list" << std::endl;
-        Generator<NodeID_, DestID_, WeightT_>::InsertWeightsGaussian(el, num_nodes_, el.size());
+    if constexpr (!std::is_same_v<NodeID_, NodeID_>)
+      if (needs_weights_) {
+        if constexpr (std::is_integral_v<WeightT_>) {
+          std::cout << "Generating integer weights for edge list" << std::endl;
+          Generator<NodeID_, DestID_, WeightT_>::InsertWeightsGAP(el);
+        } else if constexpr (std::is_floating_point_v<WeightT_>) {
+          // By using el.size(), we are counting "undirected edges" if the graph is undirected
+          std::cout << "Generating float weights for edge list" << std::endl;
+          Generator<NodeID_, DestID_, WeightT_>::InsertWeightsGaussian(el, num_nodes_, el.size());
+        }
       }
-    }
 
     if (in_place_) {
       MakeCSRInPlace(el, &index, &neighs, &inv_index, &inv_neighs);

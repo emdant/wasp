@@ -4,13 +4,18 @@
 #ifndef WRITER_H_
 #define WRITER_H_
 
+#include <cstdint>
 #include <fstream>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <unordered_map>
+#include <utility>
 
 #include "graph.h"
+#include "parallel/vector.h"
 
 /*
 GAP Benchmark Suite
@@ -122,14 +127,143 @@ public:
       WriteMM(file);
       break;
     default:
+      std::cout << "Output format not supported." << std::endl;
       break;
     }
     file.close();
   }
 
-private:
+protected:
   CSRGraph<NodeID_, DestID_>& g_;
-  std::string filename_;
 };
 
+// Specialized writer for writing only the largest connected components
+// The writer always gets an unweighted graph, and uses needs_weight to generate weights depending on the CLI options
+template <typename NodeID_>
+class LargestComponentWriter : public WriterBase<NodeID_> {
+  using rng_t_ = std::mt19937;
+
+  struct LCInfo {
+    NodeID_ id;
+    NodeID_ num_nodes;
+    int64_t num_edges;
+  };
+
+public:
+  explicit LargestComponentWriter(CSRGraph<NodeID_>& g, parallel::vector<NodeID_>& components)
+      : WriterBase<NodeID_>(g), components_(components), largest_component_(largest_component()) {
+  }
+
+  void WriteMM(std::fstream& out, bool needs_weights) {
+
+    constexpr size_t THRESHOLD = size_t(1) << 32; // 4 GiB
+    std::stringstream buffer;
+    rng_t_ rng;
+    std::normal_distribution<float> ndist(
+        static_cast<float>(1.0),
+        static_cast<float>(std::sqrt(static_cast<double>(largest_component_.num_nodes) / largest_component_.num_edges))
+    );
+    rng.seed(kRandSeed);
+
+    // MM header
+    buffer << "\%\%MatrixMarket matrix coordinate ";
+    if (needs_weights) {
+      // TODO: implement integer weights
+      if (true) {
+        buffer << "real ";
+      } else {
+        buffer << "integer ";
+      }
+    } else {
+      buffer << "pattern ";
+    }
+
+    if (this->g_.directed())
+      buffer << "general";
+    else
+      buffer << "symmetric";
+    buffer << std::endl;
+
+    int64_t lc_edges = 0;
+
+    // M x N x NNZ
+    buffer << this->g_.num_nodes() << " " << this->g_.num_nodes() << " " << largest_component_.num_edges << std::endl;
+
+    for (NodeID_ u = 0; u < this->g_.num_nodes(); u++) {
+      for (NodeID_ v : this->g_.out_neigh(u))
+        if (this->g_.directed() || u < v) {
+          if (components_[u] == largest_component_.id && components_[v] == largest_component_.id) {
+            buffer << u + 1 << " " << v + 1;
+            if (needs_weights) {
+              buffer << " " << ndist(rng);
+            }
+            buffer << std::endl;
+          }
+        }
+
+      if ((size_t)buffer.tellp() >= THRESHOLD) {
+        out << buffer.rdbuf();
+        std::stringstream().swap(buffer);
+      }
+    }
+    out << buffer.rdbuf();
+  }
+
+  void WriteGraph(std::string filename, Format format, bool needs_weights) {
+    if (filename == "") {
+      std::cout << "No output filename given (Use -h for help)" << std::endl;
+      std::exit(-8);
+    }
+    std::fstream file(filename, std::ios::out | std::ios::binary);
+    if (!file) {
+      std::cout << "Couldn't write to file " << filename << std::endl;
+      std::exit(-5);
+    }
+
+    switch (format) {
+    case MATRIX_MARKET:
+      WriteMM(file, needs_weights);
+      break;
+    default:
+      std::cout << "Output format not supported." << std::endl;
+      break;
+    }
+
+    file.close();
+  }
+
+private:
+  parallel::vector<NodeID_>& components_;
+  LCInfo largest_component_;
+
+  LCInfo largest_component() {
+    std::unordered_map<NodeID_, NodeID_> count;
+    for (NodeID_ comp_i : components_)
+      count[comp_i] += 1;
+
+    std::pair<NodeID_, NodeID_> max_pair = {0, 0};
+    for (auto kv_pair : count) {
+      if (kv_pair.second > max_pair.second)
+        max_pair = kv_pair;
+    }
+
+    int64_t lc_edges = 0;
+#pragma omp parallel for reduction(+ : lc_edges)
+    for (NodeID_ u = 0; u < this->g_.num_nodes(); u++) {
+      for (NodeID_ v : this->g_.out_neigh(u)) {
+        if (this->g_.directed() || u < v) {
+          if (components_[u] == max_pair.first && components_[v] == max_pair.first)
+            lc_edges++;
+        }
+      }
+    }
+
+    std::cout << "Largest Component: " << std::endl;
+    std::cout << "component id: " << max_pair.first << std::endl
+              << " - num_nodes: " << max_pair.second << std::endl
+              << " - num_edges: " << lc_edges << std::endl;
+
+    return LCInfo{max_pair.first, max_pair.second, lc_edges};
+  }
+};
 #endif // WRITER_H_

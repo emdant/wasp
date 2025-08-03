@@ -257,35 +257,40 @@ public:
 class CLConvert : public CLBase {
 
   std::string out_filename_ = "";
-  Format format_;
+  Format out_format_;
   bool out_weighted_ = false;
+  bool out_largest_ = false;
 
 public:
   CLConvert(int argc, char** argv, std::string name)
       : CLBase(argc, argv, name) {
-    get_args_ += "e:b:M:w";
+    get_args_ += "e:b:M:wl";
     AddHelpLine('b', "file", "output serialized graph to file");
     AddHelpLine('e', "file", "output edge list to file");
     AddHelpLine('M', "file", "output matrix market to file");
     AddHelpLine('w', "", "make output weighted");
+    AddHelpLine('l', "", "output only the largest connected component");
   }
 
   void HandleArg(signed char opt, char* opt_arg) override {
     switch (opt) {
     case 'b':
-      format_ = GAP_BINARY;
+      out_format_ = GAP_BINARY;
       out_filename_ = std::string(opt_arg);
       break;
     case 'e':
-      format_ = EDGE_LIST;
+      out_format_ = EDGE_LIST;
       out_filename_ = std::string(opt_arg);
       break;
     case 'M':
-      format_ = MATRIX_MARKET;
+      out_format_ = MATRIX_MARKET;
       out_filename_ = std::string(opt_arg);
       break;
     case 'w':
       out_weighted_ = true;
+      break;
+    case 'l':
+      out_largest_ = true;
       break;
     default:
       CLBase::HandleArg(opt, opt_arg);
@@ -295,8 +300,9 @@ public:
   std::string out_filename() const {
     return out_filename_;
   }
+  Format out_format() const { return out_format_; }
   bool out_weighted() const { return out_weighted_; }
-  Format format() const { return format_; }
+  bool out_largest() const { return out_largest_; }
 };
 
 class CLStats : public CLBase {
