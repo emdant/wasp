@@ -34,7 +34,7 @@ using namespace bucketing;
 static constexpr WeightT DIST_INF = numeric_limits<WeightT>::max() / 2;
 
 template <typename GraphT, bool DIRECTED, bool CACHE_LEAVES>
-auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
+auto BestDeltaStepping(const WGraph& g, NodeID source, WeightT delta) {
   int num_threads = omp_get_max_threads();
   parallel::atomics_array<WeightT> dist(g.num_nodes(), DIST_INF);
   dist[source] = 0;
@@ -129,7 +129,7 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, int32_t delta) {
   return dist;
 }
 
-parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32_t delta) {
+parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, WeightT delta) {
 
   if (g.directed())
     return BestDeltaStepping<WGraph, true, true>(g, source, delta);
