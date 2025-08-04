@@ -147,6 +147,7 @@ class LargestComponentWriter : public WriterBase<NodeID_> {
     NodeID_ id;
     NodeID_ num_nodes;
     int64_t num_edges;
+    NodeID_ max_node;
   };
 
 public:
@@ -187,15 +188,18 @@ public:
     int64_t lc_edges = 0;
 
     // M x N x NNZ
-    buffer << this->g_.num_nodes() << " " << this->g_.num_nodes() << " " << largest_component_.num_edges << std::endl;
+    buffer << largest_component_.max_node + 1 << " " << largest_component_.max_node + 1 << " " << largest_component_.num_edges << std::endl;
 
-    for (NodeID_ u = 0; u < this->g_.num_nodes(); u++) {
+    for (NodeID_ u = 0; u < largest_component_.max_node + 1; u++) {
       for (NodeID_ v : this->g_.out_neigh(u))
         if (this->g_.directed() || u < v) {
           if (components_[u] == largest_component_.id && components_[v] == largest_component_.id) {
             buffer << u + 1 << " " << v + 1;
             if (needs_weights) {
-              buffer << " " << ndist(rng);
+              float weight;
+              while ((weight = ndist(rng)) <= 0)
+                ;
+              buffer << " " << weight;
             }
             buffer << std::endl;
           }
@@ -248,12 +252,18 @@ private:
     }
 
     int64_t lc_edges = 0;
-#pragma omp parallel for reduction(+ : lc_edges)
+    NodeID_ max_node = 0;
+#pragma omp parallel for reduction(+ : lc_edges) reduction(max : max_node)
     for (NodeID_ u = 0; u < this->g_.num_nodes(); u++) {
       for (NodeID_ v : this->g_.out_neigh(u)) {
         if (this->g_.directed() || u < v) {
-          if (components_[u] == max_pair.first && components_[v] == max_pair.first)
+          if (components_[u] == max_pair.first && components_[v] == max_pair.first) {
             lc_edges++;
+            if (u > max_node)
+              max_node = u;
+            if (v > max_node)
+              max_node = v;
+          }
         }
       }
     }
@@ -261,9 +271,10 @@ private:
     std::cout << "Largest Component: " << std::endl;
     std::cout << "component id: " << max_pair.first << std::endl
               << " - num_nodes: " << max_pair.second << std::endl
-              << " - num_edges: " << lc_edges << std::endl;
+              << " - num_edges: " << lc_edges << std::endl
+              << " - max_node: " << max_node << std::endl;
 
-    return LCInfo{max_pair.first, max_pair.second, lc_edges};
+    return LCInfo{max_pair.first, max_pair.second, lc_edges, max_node};
   }
 };
 #endif // WRITER_H_

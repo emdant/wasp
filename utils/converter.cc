@@ -129,6 +129,7 @@ int main(int argc, char* argv[]) {
 
   std::size_t ext_pos = cli.filename().rfind('.');
   if (cli.filename().substr(ext_pos) == ".mtx" && cli.out_format() == Format::MATRIX_MARKET && cli.out_largest()) {
+    std::cout << "Output is largest (non-strongly) connected component" << std::endl;
     Builder b(cli);
     Graph g = b.MakeGraph();
     g.PrintStats();
@@ -140,12 +141,14 @@ int main(int argc, char* argv[]) {
   }
 
   if (cli.out_weighted()) {
+    std::cout << "Output is weighted" << std::endl;
     WeightedBuilder bw(cli);
     WGraph wg = bw.MakeGraph();
     wg.PrintStats();
     WeightedWriter ww(wg);
     ww.WriteGraph(cli.out_filename(), cli.out_format());
   } else {
+    std::cout << "Output is not weighted" << std::endl;
     Builder b(cli);
     Graph g = b.MakeGraph();
     g.PrintStats();
