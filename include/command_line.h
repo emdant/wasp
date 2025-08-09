@@ -311,13 +311,13 @@ class CLStats : public CLBase {
 public:
   CLStats(int argc, char** argv, std::string name)
       : CLBase(argc, argv, name) {
-    get_args_ += "o:";
-    AddHelpLine('o', "file", "output directory");
+    get_args_ += "d:";
+    AddHelpLine('d', "file", "output directory");
   }
 
   void HandleArg(signed char opt, char* opt_arg) override {
     switch (opt) {
-    case 'o':
+    case 'd':
       out_directory_ = std::string(opt_arg);
       break;
     default:
