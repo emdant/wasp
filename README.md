@@ -1,6 +1,6 @@
 # Wasp 
-Wasp is an asynchronous concurrent priority scheduler for ordered graph analytics.
-Wasp is built on top of the [GAP Benchmarking Suite](https://github.com/sbeamer/gapbs) codebase.
+Wasp is an asynchronous algorithm for paralell Single-Source Shortest Path.
+The Wasp codebase is built on top of the [GAP Benchmarking Suite](https://github.com/sbeamer/gapbs).
 
 ## Configuration
 Recommended environment:
@@ -27,7 +27,7 @@ Synthetic graphs can be generated through the options:
 The graph loading infrastructure understands the following formats (no additional flags are required):
 
 - `.el` plain-text edge-list with an edge per line as `node1 node2`
-- `.wel` plain-text weighted edge-list with an edge per line as `node1 node2 weight`
+- `.tsv` plain-text weighted edge-list with an edge per line as `node1 node2 weight` (used in the Konect graph repository)
 - `.gr` 9th DIMACS Implementation Challenge format
 - `.graph` Metis format (used in 10th DIMACS Implementation Challenge)
 - `.mtx` Matrix Market format
