@@ -7,8 +7,8 @@
 
 #include "benchmark.h"
 #include "command_line.h"
-#include "graph.h"
 #include "parallel/vector.h"
+#include "util.h"
 #include "writer.h"
 
 using namespace std;
@@ -124,11 +124,10 @@ parallel::vector<NodeID> Afforest(const Graph& g, bool logging_enabled = false, 
 }
 
 int main(int argc, char* argv[]) {
-  CLConvert cli(argc, argv, "converter");
-  cli.ParseArgs();
+  CLConverter cli(argc, argv, "converter");
+  cli.parse();
 
-  std::size_t ext_pos = cli.filename().rfind('.');
-  if (cli.filename().substr(ext_pos) == ".mtx" && cli.out_format() == Format::MATRIX_MARKET && cli.out_largest()) {
+  if (GetSuffix(cli.filename()) == ".mtx" && cli.out_format() == OutputFormat::MATRIX_MARKET && cli.out_largest()) {
     std::cout << "Output is largest (non-strongly) connected component" << std::endl;
     Builder b(cli);
     Graph g = b.MakeGraph();

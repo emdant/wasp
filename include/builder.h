@@ -30,25 +30,32 @@ Given arguments from the command line (cli), returns a built graph
  - Common case: BuilderBase typedef'd (w/ params) to be Builder (benchmark.h)
 */
 
-template <typename NodeID_, typename DestID_ = NodeID_, typename WeightT_ = NodeID_, bool invert = true>
+template <typename NodeID_, typename DestID_, typename WeightT_, bool invert = true>
 class BuilderBase {
+  static constexpr bool WEIGHTED_BUILDER = !std::is_same_v<NodeID_, DestID_>;
   typedef EdgePair<NodeID_, DestID_> Edge;
   typedef parallel::vector<Edge> EdgeList;
+  typedef Reader<NodeID_, DestID_, WeightT_, invert> ReaderT;
 
   const CLBase& cli_;
   bool symmetrize_;
-  bool override_weights_ = false;
-  bool needs_weights_;
   bool in_place_ = false;
   int64_t num_nodes_ = -1;
+
+  bool override_weights_ = false;
+  bool needs_weights_ = false;
+  WeightGenerator weight_type_ = WeightGenerator::NO_GEN;
 
 public:
   explicit BuilderBase(const CLBase& cli) : cli_(cli) {
     symmetrize_ = cli_.symmetrize();
-    override_weights_ = cli_.override_weights();
-    needs_weights_ = !std::is_same<NodeID_, DestID_>::value;
     in_place_ = cli_.in_place();
-    if (in_place_ && needs_weights_) {
+    if constexpr (WEIGHTED_BUILDER) {
+      override_weights_ = cli_.override_weights();
+      needs_weights_ = WEIGHTED_BUILDER;
+    }
+
+    if (in_place_ && WEIGHTED_BUILDER) {
       std::cout << "In-place building (-m) does not support weighted graphs"
                 << std::endl;
       exit(-30);
@@ -69,7 +76,7 @@ public:
     for (auto it = el.begin(); it < el.end(); it++) {
       Edge e = *it;
       max_seen = std::max(max_seen, e.u);
-      max_seen = std::max(max_seen, (NodeID_)e.v);
+      max_seen = std::max(max_seen, static_cast<NodeID_>(e.v));
     }
     return max_seen;
   }
@@ -341,8 +348,8 @@ public:
     if (num_nodes_ == -1)
       num_nodes_ = FindMaxNodeID(el) + 1;
 
-    if constexpr (!std::is_same_v<NodeID_, DestID_>) {
-      if (needs_weights_) {
+    if constexpr (WEIGHTED_BUILDER) {
+      if (needs_weights_ || override_weights_) {
         if constexpr (std::is_integral_v<WeightT_>) {
           std::cout << "Generating integer weights for edge list" << std::endl;
           Generator<NodeID_, DestID_, WeightT_>::InsertWeightsGAP(el);
@@ -370,21 +377,24 @@ public:
       return CSRGraph<NodeID_, DestID_, invert>(num_nodes_, index, neighs, inv_index, inv_neighs);
   }
 
-  CSRGraph<NodeID_, DestID_, invert>
-  MakeGraph() {
+  CSRGraph<NodeID_, DestID_, invert> MakeGraph() {
     CSRGraph<NodeID_, DestID_, invert> g;
     { // extra scope to trigger earlier deletion of el (save memory)
       EdgeList el;
       if (cli_.filename() != "") {
-        Reader<NodeID_, DestID_, WeightT_, invert> r(cli_.filename());
-        if ((r.GetSuffix() == ".sg") || (r.GetSuffix() == ".wsg")) {
+        ReaderT r(cli_.filename());
+        if ((GetSuffix(cli_.filename()) == ".sg") || (GetSuffix(cli_.filename()) == ".wsg")) {
           return r.ReadSerializedGraph();
         } else {
-          el = r.ReadFile(needs_weights_, symmetrize_, override_weights_);
+          typename ReaderT::ReadFileResult result = r.ReadFile();
+          el = std::move(result.el);
+          if (result.needs_symmetrize)
+            symmetrize_ = true;
+          needs_weights_ = result.needs_weights;
         }
-      } else if (cli_.scale() != -1) {
-        Generator<NodeID_, DestID_> gen(cli_.scale(), cli_.degree());
-        el = gen.GenerateEL(cli_.uniform());
+      } else if (cli_.using_generator() != -1) {
+        Generator<NodeID_, DestID_> gen(cli_.synthetic_scale(), cli_.synthetic_scale());
+        el = gen.GenerateEL(cli_.graph_generator() == GraphGenerator::UNIFORM);
       }
       g = MakeGraphFromEL(el);
     }
@@ -395,9 +405,7 @@ public:
   }
 
   // Relabels (and rebuilds) graph by order of decreasing degree
-  static CSRGraph<NodeID_, DestID_, invert> RelabelByDegree(
-      const CSRGraph<NodeID_, DestID_, invert>& g
-  ) {
+  static CSRGraph<NodeID_, DestID_, invert> RelabelByDegree(const CSRGraph<NodeID_, DestID_, invert>& g) {
     if (g.directed()) {
       std::cout << "Cannot relabel directed graph" << std::endl;
       std::exit(-11);

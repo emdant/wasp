@@ -14,6 +14,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "command_line.h"
 #include "graph.h"
 #include "parallel/vector.h"
 
@@ -106,7 +107,7 @@ public:
     }
   }
 
-  void WriteGraph(std::string filename, Format format) {
+  void WriteGraph(std::string filename, OutputFormat format) {
     if (filename == "") {
       std::cout << "No output filename given (Use -h for help)" << std::endl;
       std::exit(-8);
@@ -213,7 +214,7 @@ public:
     out << buffer.rdbuf();
   }
 
-  void WriteGraph(std::string filename, Format format, bool needs_weights) {
+  void WriteGraph(std::string filename, OutputFormat format, bool needs_weights) {
     if (filename == "") {
       std::cout << "No output filename given (Use -h for help)" << std::endl;
       std::exit(-8);

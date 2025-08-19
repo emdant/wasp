@@ -9,9 +9,8 @@
 using namespace std::string_literals;
 
 int main(int argc, char* argv[]) {
-  CLStats cli(argc, argv, "degree");
-  if (!cli.ParseArgs())
-    return -1;
+  CLStats cli(argc, argv, "degree distribution");
+  cli.parse();
 
   WeightedBuilder b(cli);
   WGraph g = b.MakeGraph();

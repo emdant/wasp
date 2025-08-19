@@ -11,9 +11,9 @@
 using namespace std::string_literals;
 
 int main(int argc, char* argv[]) {
-  CLStats cli(argc, argv, "weights");
-  if (!cli.ParseArgs())
-    return -1;
+
+  CLStats cli(argc, argv, "weights distribution");
+  cli.parse();
 
   WeightedBuilder b(cli);
   WGraph g = b.MakeGraph();

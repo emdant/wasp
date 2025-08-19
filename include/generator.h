@@ -165,8 +165,6 @@ public:
     return el;
   }
 
-  static void InsertWeightsGAP(parallel::vector<EdgePair<NodeID_, NodeID_>>& el) {}
-
   // Overwrites existing weights with random from [1,255]
   static void InsertWeightsGAP(parallel::vector<WEdge>& el) {
 #pragma omp parallel
@@ -183,8 +181,6 @@ public:
       }
     }
   }
-
-  static void InsertWeightsGaussian(parallel::vector<EdgePair<NodeID_, NodeID_>>& el, int32_t num_nodes, int64_t num_edges) {}
 
   // Weights are generated with a Gaussian distribution with mean 1.0 and stddev sqrt(V/E)
   static void InsertWeightsGaussian(parallel::vector<WEdge>& el, int32_t num_nodes, int64_t num_edges) {

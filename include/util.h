@@ -48,22 +48,22 @@ bool test_low_and_clear(T& value) {
 
 static const int64_t kRandSeed = 27491095;
 
-void PrintLabel(const std::string& label, const std::string& val) {
+inline void PrintLabel(const std::string& label, const std::string& val) {
   printf("%-21s%7s\n", (label + ":").c_str(), val.c_str());
   fflush(stdout);
 }
 
-void PrintTime(const std::string& s, double seconds) {
+inline void PrintTime(const std::string& s, double seconds) {
   printf("%-21s%3.5lf\n", (s + ":").c_str(), seconds);
   fflush(stdout);
 }
 
-void PrintStep(const std::string& s, int64_t count) {
+inline void PrintStep(const std::string& s, int64_t count) {
   printf("%-14s%14" PRId64 "\n", (s + ":").c_str(), count);
   fflush(stdout);
 }
 
-void PrintStep(const std::string& s, double seconds, int64_t count = -1) {
+inline void PrintStep(const std::string& s, double seconds, int64_t count = -1) {
   if (count != -1)
     printf("%5s%11" PRId64 "  %10.5lf\n", s.c_str(), count, seconds);
   else
@@ -71,7 +71,7 @@ void PrintStep(const std::string& s, double seconds, int64_t count = -1) {
   fflush(stdout);
 }
 
-void PrintStep(int step, double seconds, int64_t count = -1) {
+inline void PrintStep(int step, double seconds, int64_t count = -1) {
   PrintStep(std::to_string(step), seconds, count);
   fflush(stdout);
 }
@@ -115,6 +115,16 @@ public:
 template <class T>
 std::unique_ptr<T> make_unique_for_overwrite(std::size_t n) {
   return std::unique_ptr<T>(new std::remove_extent_t<T>[n]);
+}
+
+inline std::string GetSuffix(const std::string filename) {
+  std::size_t suff_pos = filename.rfind('.');
+  if (suff_pos == std::string::npos) {
+    printf("Couldn't find suffix of %s\n", filename.c_str());
+    fflush(stdout);
+    std::exit(-1);
+  }
+  return filename.substr(suff_pos);
 }
 
 #endif // UTIL_H_

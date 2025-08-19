@@ -196,8 +196,7 @@ int main(int argc, char* argv[]) {
   cout << "OMP max threads: " << max_threads << endl;
 
   CLDelta<WeightT> cli(argc, argv, "single-source shortest-path");
-  if (!cli.ParseArgs())
-    return -1;
+  cli.parse();
 
   WeightedBuilder b(cli);
   WGraph g = b.MakeGraph();

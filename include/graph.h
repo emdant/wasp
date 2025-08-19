@@ -7,16 +7,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <iostream>
+#include <istream>
 #include <type_traits>
 
 #include "parallel/vector.h"
 #include "util.h"
-
-enum Format {
-  GAP_BINARY,
-  EDGE_LIST,
-  MATRIX_MARKET
-};
 
 /*
 GAP Benchmark Suite
@@ -59,7 +54,8 @@ struct NodeWeight {
     return v == rhs;
   }
 
-  operator NodeID_() {
+  // Returning a reference allows modifying the NodeID during graph reading (1-indexed matrices)
+  operator NodeID_&() {
     return v;
   }
 };
@@ -100,6 +96,12 @@ struct EdgePair {
     return (u == rhs.u) && (v == rhs.v);
   }
 };
+
+template <typename SrcT, typename DstT = SrcT>
+std::istream& operator>>(std::istream& is, EdgePair<SrcT, DstT>& e) {
+  is >> e.u >> e.v;
+  return is;
+}
 
 // SG = serialized graph, these types are for writing graph to file
 typedef int32_t SGID;

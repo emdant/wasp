@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "builder.h"
+#include "command_line.h"
 #include "graph.h"
 #include "timer.h"
 #include "util.h"
@@ -57,7 +58,7 @@ public:
         rng_(kRandSeed),
         udist_(g.num_nodes() - 1, rng_), g_(g) {}
 
-  explicit SourcePicker(const GraphT_& g, const CLApp& cli)
+  explicit SourcePicker(const GraphT_& g, const CLTraversal& cli)
       : given_source_(cli.start_vertex()),
         rng_(kRandSeed),
         udist_(g.num_nodes() - 1, rng_), g_(g) {}
@@ -98,7 +99,7 @@ std::vector<std::pair<ValT, KeyT>> TopK(const std::vector<std::pair<KeyT, ValT>>
   return top_k;
 }
 
-bool VerifyUnimplemented(...) {
+inline bool VerifyUnimplemented(...) {
   std::cout << "** verify unimplemented **" << std::endl;
   return false;
 }
@@ -122,9 +123,9 @@ void BenchmarkKernel(const CLApp& cli, const GraphT_& g, GraphFunc kernel, Analy
     papi_helper::print_values();
 #endif
 
-    if (cli.do_analysis() && (iter == (cli.num_trials() - 1)))
+    if (cli.analysis() && (iter == (cli.num_trials() - 1)))
       stats(g, result);
-    if (cli.do_verify()) {
+    if (cli.verify()) {
       trial_timer.Start();
       PrintLabel("Verification", verify(std::ref(g), std::ref(result)) ? "PASS" : "FAIL");
       trial_timer.Stop();

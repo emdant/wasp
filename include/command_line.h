@@ -4,325 +4,273 @@
 #ifndef COMMAND_LINE_H_
 #define COMMAND_LINE_H_
 
-#include <getopt.h>
-#include <iostream>
+#include <algorithm>
+#include <cstdint>
 #include <string>
-#include <type_traits>
+
+#include <CLI11.hpp>
 #include <vector>
 
-#include "graph.h"
+enum class GraphGenerator : int {
+  NO_GEN,
+  KRONECKER,
+  UNIFORM
+};
 
-/*
-GAP Benchmark Suite
-Class:  CLBase
-Author: Scott Beamer
+enum class WeightGenerator : int {
+  NO_GEN,
+  UNIFORM,
+  NORMAL,
+};
 
-Handles command line argument parsing
- - Through inheritance, can add more options to object
- - For example, most kernels will use CLApp
-*/
+enum OutputFormat : int {
+  GAP_BINARY,
+  EDGE_LIST,
+  MATRIX_MARKET
+};
 
 class CLBase {
+private:
+  // clang-format off
+  std::map<std::string, GraphGenerator> graph_map_{
+    {"kron", GraphGenerator::KRONECKER}, {"kronecker", GraphGenerator::KRONECKER},
+    {"uni", GraphGenerator::UNIFORM}, {"uniform", GraphGenerator::UNIFORM}
+  };
+
+  std::map<std::string, WeightGenerator> weight_map_{
+    {"normal", WeightGenerator::NORMAL}, {"uniform", WeightGenerator::UNIFORM}
+  };
+
+  // clang-format on
+
+  void print_options(const std::vector<CLI::Option*>& options) {
+    auto join_strings = [](const std::vector<std::string>& vec, const std::string& delim) {
+      if (vec.empty()) {
+        return std::string("");
+      }
+      // Use std::accumulate to efficiently join the strings
+      return std::accumulate(
+          std::next(vec.begin()),
+          vec.end(),
+          vec[0],
+          [&delim](const std::string& a, const std::string& b) {
+            return a + delim + b;
+          }
+      );
+    };
+
+    // Iterate through all options
+    for (const CLI::Option* opt : options) {
+      // Skip the help flag
+      if (opt->get_name() == "--help") {
+        continue;
+      }
+
+      std::cout << opt->get_name() << ": ";
+
+      // Check if the option was passed on the command line
+      if (opt->count() > 0) {
+        if (opt->get_type_size() == 0) { // Check for a flag
+          std::cout << "true [CLI]";
+        } else {
+          std::cout << join_strings(opt->results(), ", ") << " [CLI]";
+        }
+      } else if (!opt->get_default_str().empty()) {
+        std::cout << opt->get_default_str() << " [default]"; // If not passed, print its default value
+      } else {
+        std::cout << "[not set]"; // For options without a default that were not passed
+      }
+      std::cout << std::endl;
+    }
+  }
+
+  void print_config(CLI::App& app) {
+    std::cout << "------ Configuration ------" << std::endl;
+
+    auto group = app.get_option_group("graph");
+    auto filename_opt = group->get_option("--filename");
+
+    auto options = app.get_options();
+    if (!filename_opt->empty()) {
+      options.erase(std::remove_if(options.begin(), options.end(), [&](auto option) {
+                      return option->get_name() == "--scale" || option->get_name() == "--degree";
+                    }),
+                    options.end());
+
+      print_options(std::vector{filename_opt});
+      print_options(options);
+    } else {
+      auto synthetic_opt = group->get_option("--synthetic-gen");
+      print_options(std::vector{synthetic_opt});
+      print_options(options);
+    }
+
+    std::cout << "---------------------" << std::endl;
+  }
+
 protected:
+  CLI::App app_;
   int argc_;
   char** argv_;
-  std::string name_;
-  std::string get_args_ = "f:g:hk:su:mo";
-  std::vector<std::string> help_strings_;
 
-  int scale_ = -1;
-  int degree_ = 16;
-  std::string filename_ = "";
-  bool symmetrize_ = false;
-  bool uniform_ = false;
-  bool in_place_ = false;
-  bool override_weights_ = false;
-
-  void AddHelpLine(char opt, std::string opt_arg, std::string text, std::string def = "") {
-    const int kBufLen = 100;
-    char buf[kBufLen];
-    if (opt_arg != "")
-      opt_arg = "<" + opt_arg + ">";
-    if (def != "")
-      def = "[" + def + "]";
-    snprintf(buf, kBufLen, " -%c %-9s: %-54s%10s", opt, opt_arg.c_str(), text.c_str(), def.c_str());
-    help_strings_.push_back(buf);
-  }
+  // Member variables to hold the parsed option values
+  std::string filename_{""};
+  bool in_place_{false};
+  bool symmetrize_{false};
+  GraphGenerator gen_{GraphGenerator::NO_GEN};
+  int gen_scale_{16};
+  int gen_degree_{16};
+  bool override_weights_{false};
+  WeightGenerator weights_{WeightGenerator::NO_GEN};
 
 public:
-  CLBase(int argc, char** argv, std::string name = "") : argc_(argc), argv_(argv), name_(name) {
-    AddHelpLine('h', "", "print this help message");
-    AddHelpLine('f', "file", "load graph from file");
-    AddHelpLine('s', "", "symmetrize input edge list", "false");
-    AddHelpLine('g', "scale", "generate 2^scale kronecker graph");
-    AddHelpLine('u', "scale", "generate 2^scale uniform-random graph");
-    AddHelpLine('k', "degree", "average degree for synthetic graph", std::to_string(degree_));
-    AddHelpLine('m', "", "reduces memory usage during graph building", "false");
-    AddHelpLine('o', "", "override existing weights with generated ones", "false");
+  explicit CLBase(int argc, char** argv, std::string name)
+      : app_(name), argc_(argc), argv_(argv) {
+    auto graph_input_group = app_.add_option_group("graph");
+    graph_input_group->add_option("-f,--filename", filename_, "Load graph from file")
+        ->default_val("");
+
+    app_.add_flag("--symmetrize", symmetrize_, "Symmetrize input edge list")
+        ->default_val(false);
+    app_.add_flag("--in-place", in_place_, "Reduces memory usage during graph building")
+        ->default_val(false);
+
+    auto synthetic_opt = graph_input_group->add_option("--synthetic-gen", gen_, "Kind of synthetic graph to generate")
+                             ->transform(CLI::CheckedTransformer(graph_map_, CLI::ignore_case));
+    app_.add_option("--scale", gen_scale_, "Scale of the synthetic graph (2^{scale})")
+        ->needs(synthetic_opt)
+        ->default_val(16);
+    app_.add_option("--degree", gen_degree_, "Average degree of the  synthetic graph")
+        ->needs(synthetic_opt)
+        ->default_val(16);
+
+    graph_input_group->require_option(1);
+
+    // Weights options
+    app_.add_flag("--override-weights", override_weights_, "Override existing weights with generated ones")
+        ->default_val(false);
+
+    app_.add_option("--weight-gen", weights_, "Kind of synthetic weights to generate")
+        ->default_val(WeightGenerator::NO_GEN)
+        ->transform(CLI::CheckedTransformer(weight_map_, CLI::ignore_case));
   }
 
-  bool ParseArgs() {
-    signed char c_opt;
-    extern char* optarg; // from and for getopt
-    while ((c_opt = getopt(argc_, argv_, get_args_.c_str())) != -1) {
-      HandleArg(c_opt, optarg);
-    }
-    if ((filename_ == "") && (scale_ == -1)) {
-      std::cout << "No graph input specified. (Use -h for help)" << std::endl;
-      return false;
-    }
-    if (scale_ != -1)
-      symmetrize_ = true;
-    return true;
+  virtual ~CLBase() = default;
+
+  void parse() {
+    app_.parse(argc_, argv_);
+    print_config(app_);
   }
 
-  void virtual HandleArg(signed char opt, char* opt_arg) {
-    switch (opt) {
-    case 'f':
-      filename_ = std::string(opt_arg);
-      break;
-    case 'g':
-      scale_ = atoi(opt_arg);
-      break;
-    case 'h':
-      PrintUsage();
-      break;
-    case 'k':
-      degree_ = atoi(opt_arg);
-      break;
-    case 's':
-      symmetrize_ = true;
-      break;
-    case 'u':
-      uniform_ = true;
-      scale_ = atoi(opt_arg);
-      break;
-    case 'm':
-      in_place_ = true;
-      break;
-    case 'o':
-      override_weights_ = true;
-      break;
-    }
-  }
-
-  void PrintUsage() {
-    std::cout << name_ << std::endl;
-    // std::sort(help_strings_.begin(), help_strings_.end());
-    for (std::string h : help_strings_)
-      std::cout << h << std::endl;
-    std::exit(0);
-  }
-
-  int scale() const { return scale_; }
-  int degree() const { return degree_; }
   std::string filename() const { return filename_; }
   bool symmetrize() const { return symmetrize_; }
-  bool uniform() const { return uniform_; }
   bool in_place() const { return in_place_; }
-  void set_filename(std::string filename) { filename_ = filename; }
+  GraphGenerator graph_generator() const { return gen_; }
+  int synthetic_scale() const { return gen_scale_; }
+  int synthetic_degree() const { return gen_degree_; }
+  bool using_generator() const { return gen_ != GraphGenerator::NO_GEN; }
+
   bool override_weights() const { return override_weights_; }
+  WeightGenerator weight_generator() const { return weights_; }
 };
 
 class CLApp : public CLBase {
-  bool do_analysis_ = false;
-  int num_trials_ = 12;
-  int64_t start_vertex_ = -1;
-  bool do_verify_ = false;
-  bool enable_logging_ = false;
-  int num_sources_ = 1;
+protected:
+  int num_trials_{12};
+  bool analysis_{false};
+  bool verify_{false};
 
 public:
-  CLApp(int argc, char** argv, std::string name) : CLBase(argc, argv, name) {
-    get_args_ += "an:r:S:Rvl";
-    AddHelpLine('a', "", "output analysis of last run", "false");
-    AddHelpLine('n', "n", "perform n trials", std::to_string(num_trials_));
-    AddHelpLine('r', "node", "start from node r", "rand");
-    AddHelpLine('S', "sources", "number of source vertices", std::to_string(num_sources_));
-    AddHelpLine('v', "", "verify the output of each run", "false");
-    AddHelpLine('l', "", "log performance within each trial", "false");
+  explicit CLApp(int argc, char** argv, std::string name) : CLBase(argc, argv, name) {
+    app_.add_option("-n,--num-trials", num_trials_, "Number of trials to perform")->default_val(12);
+    app_.add_flag("-a,--analysis", analysis_, "Output analysis of last run")->default_val(false);
+    app_.add_flag("-v,--verify", verify_, "Verify the output of each run")->default_val(false);
   }
 
-  void HandleArg(signed char opt, char* opt_arg) override {
-    using namespace std::string_literals;
-
-    switch (opt) {
-    case 'a':
-      do_analysis_ = true;
-      break;
-    case 'n':
-      num_trials_ = atoi(opt_arg);
-      break;
-    case 'r':
-      start_vertex_ = atol(opt_arg);
-      break;
-    case 'v':
-      do_verify_ = true;
-      break;
-    case 'l':
-      enable_logging_ = true;
-      break;
-    case 'S':
-      num_sources_ = atoi(opt_arg);
-      break;
-    default:
-      CLBase::HandleArg(opt, opt_arg);
-    }
-  }
-
-  bool do_analysis() const { return do_analysis_; }
   int num_trials() const { return num_trials_; }
+  bool analysis() const { return analysis_; }
+  bool verify() const { return verify_; }
+};
+
+class CLTraversal : public CLApp {
+protected:
+  int64_t start_vertex_{-1};
+  int num_sources_{1};
+
+public:
+  explicit CLTraversal(int argc, char** argv, std::string name) : CLApp(argc, argv, name) {
+    app_.add_option("-r,--start-vertex", start_vertex_, "Start traversal from vertex")
+        ->default_val(-1) // -1 indicates not set by user
+        ->default_str("randomly generated");
+    app_.add_option("-S,--num-sources", num_sources_, "Number of source vertices to test")
+        ->default_val(1);
+  }
+
   int64_t start_vertex() const { return start_vertex_; }
-  bool do_verify() const { return do_verify_; }
-  bool logging_en() const { return enable_logging_; }
   int num_sources() const { return num_sources_; }
-};
-
-class CLIterApp : public CLApp {
-  int num_iters_;
-
-public:
-  CLIterApp(int argc, char** argv, std::string name, int num_iters) : CLApp(argc, argv, name), num_iters_(num_iters) {
-    get_args_ += "i:";
-    AddHelpLine('i', "i", "perform i iterations", std::to_string(num_iters_));
+  bool start_vertex_is_set() const {
+    return app_.count("--start-vertex") >= 0;
   }
-
-  void HandleArg(signed char opt, char* opt_arg) override {
-    switch (opt) {
-    case 'i':
-      num_iters_ = atoi(opt_arg);
-      break;
-    default:
-      CLApp::HandleArg(opt, opt_arg);
-    }
-  }
-
-  int num_iters() const { return num_iters_; }
-};
-
-class CLPageRank : public CLApp {
-  int max_iters_;
-  double tolerance_;
-
-public:
-  CLPageRank(int argc, char** argv, std::string name, double tolerance, int max_iters) : CLApp(argc, argv, name), max_iters_(max_iters), tolerance_(tolerance) {
-    get_args_ += "i:t:";
-    AddHelpLine('i', "i", "perform at most i iterations", std::to_string(max_iters_));
-    AddHelpLine('t', "t", "use tolerance t", std::to_string(tolerance_));
-  }
-
-  void HandleArg(signed char opt, char* opt_arg) override {
-    switch (opt) {
-    case 'i':
-      max_iters_ = atoi(opt_arg);
-      break;
-    case 't':
-      tolerance_ = std::stod(opt_arg);
-      break;
-    default:
-      CLApp::HandleArg(opt, opt_arg);
-    }
-  }
-
-  int max_iters() const { return max_iters_; }
-  double tolerance() const { return tolerance_; }
 };
 
 template <typename WeightT_>
-class CLDelta : public CLApp {
-  WeightT_ delta_ = 1;
+class CLDelta : public CLTraversal {
+protected:
+  WeightT_ delta_{1};
 
 public:
-  CLDelta(int argc, char** argv, std::string name) : CLApp(argc, argv, name) {
-    get_args_ += "d:";
-    AddHelpLine('d', "d", "delta parameter", std::to_string(delta_));
-  }
-
-  void HandleArg(signed char opt, char* opt_arg) override {
-    switch (opt) {
-    case 'd':
-      if (std::is_floating_point<WeightT_>::value)
-        delta_ = static_cast<WeightT_>(atof(opt_arg));
-      else
-        delta_ = static_cast<WeightT_>(atol(opt_arg));
-      break;
-    default:
-      CLApp::HandleArg(opt, opt_arg);
-    }
+  explicit CLDelta(int argc, char** argv, std::string name)
+      : CLTraversal(argc, argv, name) {
+    app_.add_option("-d,--delta", delta_, "Delta parameter")->default_val(1);
   }
 
   WeightT_ delta() const { return delta_; }
 };
 
-class CLConvert : public CLBase {
+class CLConverter : public CLBase {
+private:
+  // clang-format off
+  std::map<std::string, OutputFormat> format_map_{
+    {"gap", OutputFormat::GAP_BINARY}, {"el", OutputFormat::EDGE_LIST}, {"mtx", OutputFormat::MATRIX_MARKET}
+  };
+  // clang-format on
 
-  std::string out_filename_ = "";
-  Format out_format_;
-  bool out_weighted_ = false;
-  bool out_largest_ = false;
+protected:
+  std::string out_filename_;
+  OutputFormat out_format_;
+  bool out_weighted_{false};
+  bool out_largest_{false};
 
 public:
-  CLConvert(int argc, char** argv, std::string name)
+  explicit CLConverter(int argc, char** argv, std::string name)
       : CLBase(argc, argv, name) {
-    get_args_ += "e:b:M:wl";
-    AddHelpLine('b', "file", "output serialized graph to file");
-    AddHelpLine('e', "file", "output edge list to file");
-    AddHelpLine('M', "file", "output matrix market to file");
-    AddHelpLine('w', "", "make output weighted");
-    AddHelpLine('l', "", "output only the largest connected component");
+    app_.add_option("-o,--output", out_filename_, "Output graph to this file")
+        ->required();
+    app_.add_option("--format", out_format_, "Output format")
+        ->required()
+        ->transform(CLI::CheckedTransformer(format_map_, CLI::ignore_case));
+
+    app_.add_flag("-w,--weighted", out_weighted_, "Make output weighted")
+        ->default_val(false);
+    app_.add_flag("-l,--lcc", out_largest_, "Only output the largest (non-strongly) connected component")
+        ->default_val(false);
   }
 
-  void HandleArg(signed char opt, char* opt_arg) override {
-    switch (opt) {
-    case 'b':
-      out_format_ = GAP_BINARY;
-      out_filename_ = std::string(opt_arg);
-      break;
-    case 'e':
-      out_format_ = EDGE_LIST;
-      out_filename_ = std::string(opt_arg);
-      break;
-    case 'M':
-      out_format_ = MATRIX_MARKET;
-      out_filename_ = std::string(opt_arg);
-      break;
-    case 'w':
-      out_weighted_ = true;
-      break;
-    case 'l':
-      out_largest_ = true;
-      break;
-    default:
-      CLBase::HandleArg(opt, opt_arg);
-    }
-  }
-
-  std::string out_filename() const {
-    return out_filename_;
-  }
-  Format out_format() const { return out_format_; }
+  std::string out_filename() const { return out_filename_; }
+  OutputFormat out_format() const { return out_format_; }
   bool out_weighted() const { return out_weighted_; }
   bool out_largest() const { return out_largest_; }
 };
 
 class CLStats : public CLBase {
-  std::string out_directory_ = "";
+protected:
+  std::string out_directory_;
 
 public:
-  CLStats(int argc, char** argv, std::string name)
+  explicit CLStats(int argc, char** argv, std::string name)
       : CLBase(argc, argv, name) {
-    get_args_ += "d:";
-    AddHelpLine('d', "file", "output directory");
-  }
-
-  void HandleArg(signed char opt, char* opt_arg) override {
-    switch (opt) {
-    case 'd':
-      out_directory_ = std::string(opt_arg);
-      break;
-    default:
-      CLBase::HandleArg(opt, opt_arg);
-    }
+    app_.add_option("-d,--output-directory", out_directory_, "Output directory")
+        ->required();
   }
 
   std::string out_directory() const { return out_directory_; }

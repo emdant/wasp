@@ -1,17 +1,13 @@
 // Copyright (c) 2015, The Regents of the University of California (Regents)
 // See LICENSE.txt for license details
 
-#include <cinttypes>
 #include <iostream>
 #include <limits>
 #include <queue>
 #include <vector>
 
 #include "benchmark.h"
-#include "builder.h"
 #include "command_line.h"
-#include "graph.h"
-#include "timer.h"
 
 using namespace std;
 
@@ -63,18 +59,23 @@ vector<WeightT> Dijkstra(const WGraph& g, NodeID source) {
 }
 
 int main(int argc, char* argv[]) {
-  CLDelta<WeightT> cli(argc, argv, "single-source shortest-path");
-  if (!cli.ParseArgs())
-    return -1;
+  CLTraversal cli(argc, argv, "single-source shortest-path");
+  cli.parse();
+
   WeightedBuilder b(cli);
   WGraph g = b.MakeGraph();
   SourcePicker<WGraph> sp(g, cli);
-  auto SSSPBound = [&sp, &cli](const WGraph& g) {
+
+  for (auto i = 0; i < cli.num_sources(); i++) {
     auto source = sp.PickNext();
     std::cout << "Source: " << source << std::endl;
-    return Dijkstra(g, source);
-  };
 
-  BenchmarkKernel(cli, g, SSSPBound, PrintSSSPStats, VerifyUnimplemented);
+    auto SSSPBound = [&sp, &cli, source](const WGraph& g) {
+      return Dijkstra(g, source);
+    };
+
+    BenchmarkKernel(cli, g, SSSPBound, PrintSSSPStats, VerifyUnimplemented);
+  }
+
   return 0;
 }
