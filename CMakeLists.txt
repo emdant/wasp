@@ -14,10 +14,16 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
 endif()
 
-add_compile_options("-Wno-interference-size")
-add_compile_options("-march=native")
 
-link_libraries("-lnuma")
+add_library(wasp INTERFACE)
+target_include_directories(wasp INTERFACE "include")
+target_include_directories(wasp INTERFACE "extern")
+target_compile_options(wasp INTERFACE "-Wno-interference-size")
+target_compile_options(wasp INTERFACE "-march=native")
+target_link_libraries(wasp INTERFACE "numa")
+
+find_package(OpenMP REQUIRED)
+target_link_libraries(wasp INTERFACE OpenMP::OpenMP_CXX)
 
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   execute_process(COMMAND gcc -print-search-dirs
@@ -29,34 +35,27 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
 
   string(REGEX MATCH "^install:[ \t]*([^\r\n]*)" gcc_install_dir "${gcc_install_dir}" )
   set(gcc_install_dir "${CMAKE_MATCH_1}")
-  add_compile_options("--gcc-install-dir=${gcc_install_dir}")
+  target_compile_options(wasp INTERFACE "--gcc-install-dir=${gcc_install_dir}")
 endif()
-
-find_package(OpenMP REQUIRED)
-link_libraries(OpenMP::OpenMP_CXX)
-
-include_directories(include)
 
 option(LINK_PAPI "Link the PAPI library and compile the programs using PAPI" OFF)
 if (LINK_PAPI)
   if(DEFINED ENV{PAPI_DIR})
     set(PAPI_DIR $ENV{PAPI_DIR})
     
-    include_directories(${PAPI_DIR}/include)
-    link_directories(${PAPI_DIR}/lib)
-    link_libraries("papi")
-
-    add_compile_definitions(PAPI_PROFILE)
+    target_include_directories(wasp INTERFACE ${PAPI_DIR}/include)
+    target_link_directories(wasp INTERFACE ${PAPI_DIR}/lib)
+    target_link_libraries(wasp INTERFACE "papi")
+    target_compile_definitions(wasp INTERFACE PAPI_PROFILE)
   else()
     message(FATAL_ERROR "PAPI_DIR is not defined")
   endif()
 endif()
 
-option(COUNT_RELAX "Count the number of relaxations during SSSP" OFF)
-option(COMPILE_UTILS "Enable the compilation of utilities" OFF)
-
+### Variable storing the list of types to compile for
 set(TYPES int32 float)
 
+### Utility function to automatically create different executables for different types
 function(create_typed_target TARGET_NAME SOURCE_FILE)
   add_custom_target(${TARGET_NAME})
 
@@ -66,27 +65,17 @@ function(create_typed_target TARGET_NAME SOURCE_FILE)
     add_executable(${TYPED_TARGET} ${SOURCE_FILE})
     string(TOUPPER ${TYPE} UPPER_TYPE)
     target_compile_definitions(${TYPED_TARGET} PRIVATE USE_${UPPER_TYPE})
-    
+    target_link_libraries(${TYPED_TARGET} PRIVATE wasp)
     add_dependencies(${TARGET_NAME} ${TYPED_TARGET})
   endforeach()
 endfunction()
 
-if (COUNT_RELAX)
-  create_typed_target(sssp-crelax src/sssp.cc)
-  foreach(TYPE ${TYPES})
-    target_compile_definitions(sssp-crelax-${TYPE} PRIVATE COUNT_RELAX)
-  endforeach()
-endif()
+option(COUNT_RELAX "Count the number of relaxations during SSSP" OFF)
+add_subdirectory(src)
 
-create_typed_target(dijkstra src/dijkstra.cc)
-create_typed_target(sssp src/sssp.cc)
-# add_executable(bfs src/bfs.cc)
-
+option(COMPILE_UTILS "Enable the compilation of utilities" OFF)
 if (COMPILE_UTILS)
-create_typed_target(converter utils/converter.cc)
-create_typed_target(weight utils/weight.cc)
-create_typed_target(degree utils/degree.cc)
-create_typed_target(check-graph utils/check-graph.cc)
+  add_subdirectory(utils)
 endif()
 
 option(COMPILE_TESTS "Enable the compilation of tests" OFF)

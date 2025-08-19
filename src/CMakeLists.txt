@@ -1,0 +1,10 @@
+create_typed_target(dijkstra dijkstra.cc)
+create_typed_target(sssp sssp.cc)
+# add_executable(bfs bfs.cc)
+
+if (COUNT_RELAX)
+  create_typed_target(sssp-crelax sssp.cc)
+  foreach(TYPE ${TYPES})
+    target_compile_definitions(sssp-crelax-${TYPE} PRIVATE COUNT_RELAX)
+  endforeach()
+endif()
