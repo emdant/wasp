@@ -9,6 +9,7 @@
 #include <string>
 
 #include <CLI11.hpp>
+#include <utility>
 #include <vector>
 
 enum class GraphGenerator : int {
@@ -121,7 +122,8 @@ protected:
   int gen_scale_{16};
   int gen_degree_{16};
   bool override_weights_{false};
-  WeightGenerator weights_{WeightGenerator::NO_GEN};
+  WeightGenerator weight_dist_{WeightGenerator::NO_GEN};
+  std::pair<double, double> weight_range_;
 
 public:
   explicit CLBase(int argc, char** argv, std::string name)
@@ -134,25 +136,30 @@ public:
         ->default_val(false);
     app_.add_flag("--in-place", in_place_, "Reduces memory usage during graph building")
         ->default_val(false);
-
-    auto synthetic_opt = graph_input_group->add_option("--synthetic-gen", gen_, "Kind of synthetic graph to generate")
-                             ->transform(CLI::CheckedTransformer(graph_map_, CLI::ignore_case));
-    app_.add_option("--scale", gen_scale_, "Scale of the synthetic graph (2^{scale})")
-        ->needs(synthetic_opt)
-        ->default_val(16);
-    app_.add_option("--degree", gen_degree_, "Average degree of the  synthetic graph")
-        ->needs(synthetic_opt)
-        ->default_val(16);
-
-    graph_input_group->require_option(1);
-
-    // Weights options
     app_.add_flag("--override-weights", override_weights_, "Override existing weights with generated ones")
         ->default_val(false);
 
-    app_.add_option("--weight-gen", weights_, "Kind of synthetic weights to generate")
-        ->default_val(WeightGenerator::NO_GEN)
-        ->transform(CLI::CheckedTransformer(weight_map_, CLI::ignore_case));
+    auto synthetic_gen = graph_input_group->add_option("--synthetic-gen", gen_, "Kind of synthetic graph to generate")
+                             ->transform(CLI::CheckedTransformer(graph_map_, CLI::ignore_case));
+    app_.add_option("--scale", gen_scale_, "Scale of the synthetic graph (2^{scale})")
+        ->needs(synthetic_gen)
+        ->default_val(16);
+
+    app_.add_option("--degree", gen_degree_, "Average degree of the  synthetic graph")
+        ->needs(synthetic_gen)
+        ->default_val(16);
+
+    auto wt = app_.add_option("--weight-gen", weight_dist_, "Kind of synthetic weights to generate")
+                  ->default_val(WeightGenerator::NO_GEN)
+                  ->transform(CLI::CheckedTransformer(weight_map_, CLI::ignore_case));
+
+    auto wr = app_.add_option("--weight-range", weight_range_, "Range [a, b) of the uniform distribution")
+                  ->needs(wt)
+                  ->expected(0, 2);
+
+    synthetic_gen->needs(wt);
+
+    graph_input_group->require_option(1);
   }
 
   virtual ~CLBase() = default;
@@ -171,7 +178,8 @@ public:
   bool using_generator() const { return gen_ != GraphGenerator::NO_GEN; }
 
   bool override_weights() const { return override_weights_; }
-  WeightGenerator weight_generator() const { return weights_; }
+  WeightGenerator weight_distribution() const { return weight_dist_; }
+  std::pair<double, double> weight_range() const { return weight_range_; }
 };
 
 class CLApp : public CLBase {

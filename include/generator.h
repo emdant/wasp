@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <limits>
 #include <random>
+#include <type_traits>
 
 #include "graph.h"
 #include "parallel/vector.h"
@@ -166,7 +167,7 @@ public:
   }
 
   // Overwrites existing weights with random from [1,255]
-  static void InsertWeightsGAP(parallel::vector<WEdge>& el) {
+  static void InsertUniformWeightsGAP(parallel::vector<WEdge>& el) {
 #pragma omp parallel
     {
       rng_t_ rng;
@@ -182,8 +183,29 @@ public:
     }
   }
 
-  // Weights are generated with a Gaussian distribution with mean 1.0 and stddev sqrt(V/E)
-  static void InsertWeightsGaussian(parallel::vector<WEdge>& el, int32_t num_nodes, int64_t num_edges) {
+  // Populates the edge weights with uniformly distributed weights in the interval [begin, end)
+  static void InsertUniformWeights(parallel::vector<WEdge>& el, WeightT_ begin, WeightT_ end) {
+    using uniform_dist = std::conditional_t<std::is_floating_point_v<WeightT_>, std::uniform_real_distribution<WeightT_>, std::uniform_int_distribution<WeightT_>>;
+#pragma omp parallel
+    {
+      rng_t_ rng;
+      if constexpr (std::is_integral_v<WeightT_>) {
+        end--; // normally, std::uniform_int_distribution<WeightT_> generates values into [begin, end], we want [begin, end)
+      }
+      uniform_dist udist(begin, end);
+      int64_t el_size = el.size();
+#pragma omp for
+      for (int64_t block = 0; block < el_size; block += block_size) {
+        rng.seed(kRandSeed + block / block_size);
+        for (int64_t e = block; e < std::min(block + block_size, el_size); e++) {
+          el[e].v.w = static_cast<WeightT_>(udist(rng));
+        }
+      }
+    }
+  }
+
+  // Weights are generated with a normal distribution with mean 1.0 and stddev sqrt(V/E)
+  static void InsertNormalWeights(parallel::vector<WEdge>& el, int32_t num_nodes, int64_t num_edges) {
 #pragma omp parallel
     {
       rng_t_ rng;

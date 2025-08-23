@@ -5,6 +5,7 @@
 #define BUILDER_H_
 
 #include <algorithm>
+#include <cstdlib>
 #include <functional>
 #include <type_traits>
 #include <utility>
@@ -44,7 +45,8 @@ class BuilderBase {
 
   bool override_weights_ = false;
   bool needs_weights_ = false;
-  WeightGenerator weight_type_ = WeightGenerator::NO_GEN;
+  WeightGenerator weight_dist_ = WeightGenerator::NO_GEN;
+  std::pair<WeightT_, WeightT_> weight_range_;
 
 public:
   explicit BuilderBase(const CLBase& cli) : cli_(cli) {
@@ -53,6 +55,8 @@ public:
     if constexpr (WEIGHTED_BUILDER) {
       override_weights_ = cli_.override_weights();
       needs_weights_ = WEIGHTED_BUILDER;
+      weight_dist_ = cli.weight_distribution();
+      weight_range_ = cli.weight_range();
     }
 
     if (in_place_ && WEIGHTED_BUILDER) {
@@ -350,13 +354,21 @@ public:
 
     if constexpr (WEIGHTED_BUILDER) {
       if (needs_weights_ || override_weights_) {
-        if constexpr (std::is_integral_v<WeightT_>) {
-          std::cout << "Generating integer weights for edge list" << std::endl;
-          Generator<NodeID_, DestID_, WeightT_>::InsertWeightsGAP(el);
-        } else if constexpr (std::is_floating_point_v<WeightT_>) {
-          // By using el.size(), we are counting "undirected edges" if the graph is undirected
-          std::cout << "Generating float weights for edge list" << std::endl;
-          Generator<NodeID_, DestID_, WeightT_>::InsertWeightsGaussian(el, num_nodes_, el.size());
+        if (weight_dist_ == WeightGenerator::UNIFORM) {
+          std::cout << "Generating uniformly distributed weight within range ["
+                    << weight_range_.first << ", " << weight_range_.second << ")" << std::endl;
+          Generator<NodeID_, DestID_, WeightT_>::InsertUniformWeights(el, weight_range_.first, weight_range_.second);
+        } else if (weight_dist_ == WeightGenerator::NORMAL) {
+          if constexpr (std::is_floating_point_v<WeightT_>) {
+            std::cout << "Generating normally distributed weights with mu=1, stddev=sqrt(V/E)" << std::endl;
+            Generator<NodeID_, DestID_, WeightT_>::InsertNormalWeights(el, num_nodes_, el.size());
+          } else {
+            std::cout << "Normal distribution not supported for integer weights" << std::endl;
+            exit(-1);
+          }
+        } else {
+          std::cout << "Weight generator not suppported" << std::endl;
+          exit(-1);
         }
       }
     }
