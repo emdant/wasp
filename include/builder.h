@@ -8,11 +8,14 @@
 #include <cstdlib>
 #include <functional>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "command_line.h"
 #include "generator.h"
 #include "graph.h"
+#include "omp.h"
 #include "parallel/vector.h"
 #include "platform_atomics.h"
 #include "reader.h"
@@ -43,6 +46,7 @@ class BuilderBase {
   bool in_place_ = false;
   int64_t num_nodes_ = -1;
 
+  bool relabel_vertices_ = false;
   bool override_weights_ = false;
   bool needs_weights_ = false;
   WeightGenerator weight_dist_ = WeightGenerator::NO_GEN;
@@ -66,12 +70,78 @@ public:
     }
   }
 
+  void toggleRelabeling(bool state) {
+    relabel_vertices_ = state;
+  }
+
   DestID_ GetSource(EdgePair<NodeID_, NodeID_> e) {
     return e.u;
   }
 
   DestID_ GetSource(EdgePair<NodeID_, NodeWeight<NodeID_, WeightT_>> e) {
     return NodeWeight<NodeID_, WeightT_>(e.u, e.v.w);
+  }
+
+  void RelabelEL(EdgeList& el) {
+    Timer t;
+    t.Start();
+    if (el.size() < (1 << 20)) {
+      // Sequential
+      std::unordered_map<NodeID_, NodeID_> mapping;
+      NodeID_ i = 0;
+      for (Edge& e : el) {
+        if (auto it = mapping.find(e.u); it != mapping.end()) {
+          e.u = it->second;
+        } else {
+          e.u = mapping[e.u] = i++;
+        }
+
+        NodeID_& v = static_cast<NodeID_&>(e.v); // if typeof(e.v) == NodeWeight, then static_cast<NodeID_&>(e) == Node&
+        if (auto it = mapping.find(v); it != mapping.end()) {
+          v = it->second;
+        } else {
+          v = mapping[v] = i++;
+        }
+      }
+    } else {
+      std::vector<std::unordered_set<NodeID_>> thread_local_sets(omp_get_max_threads());
+
+#pragma omp parallel
+      {
+        std::unordered_set<NodeID_> local_nodes;
+// Each thread processes a chunk of the edge list to find unique node ids
+#pragma omp for nowait
+        for (auto& e : el) {
+          local_nodes.insert(e.u);
+          const NodeID_& v = static_cast<NodeID_&>(e.v);
+          local_nodes.insert(v);
+        }
+
+        thread_local_sets[omp_get_thread_num()] = std::move(local_nodes);
+      }
+
+      // Unique node ids are consolidated into a single set and new ids are calculated
+      std::unordered_map<NodeID_, NodeID_> mapping;
+
+      std::unordered_set<NodeID_> all_unique_nodes;
+      for (const auto& s : thread_local_sets) {
+        all_unique_nodes.insert(s.begin(), s.end());
+      }
+      NodeID_ i = 0;
+      for (const NodeID_& old_id : all_unique_nodes) {
+        mapping[old_id] = i++;
+      }
+
+      // Each thread updates the ids of a chunk of vertices
+#pragma omp parallel for
+      for (Edge& e : el) {
+        e.u = mapping.at(e.u);
+        NodeID_& v = static_cast<NodeID_&>(e.v);
+        v = mapping.at(v);
+      }
+    }
+    t.Stop();
+    PrintTime("Relabeling Time", t.Seconds());
   }
 
   NodeID_ FindMaxNodeID(const EdgeList& el) {
@@ -408,6 +478,8 @@ public:
         Generator<NodeID_, DestID_> gen(cli_.synthetic_scale(), cli_.synthetic_scale());
         el = gen.GenerateEL(cli_.graph_generator() == GraphGenerator::UNIFORM);
       }
+      if (relabel_vertices_)
+        RelabelEL(el);
       g = MakeGraphFromEL(el);
     }
     if (in_place_)

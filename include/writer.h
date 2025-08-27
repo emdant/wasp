@@ -117,6 +117,7 @@ public:
       std::cout << "Couldn't write to file " << filename << std::endl;
       std::exit(-5);
     }
+    file << std::setprecision(std::numeric_limits<float>::max_digits10);
     switch (format) {
     case GAP_BINARY:
       WriteSerializedGraph(file);

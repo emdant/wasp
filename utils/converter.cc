@@ -130,6 +130,7 @@ int main(int argc, char* argv[]) {
   if (GetSuffix(cli.filename()) == ".mtx" && cli.out_format() == OutputFormat::MATRIX_MARKET && cli.out_largest()) {
     std::cout << "Output is largest (non-strongly) connected component" << std::endl;
     Builder b(cli);
+    b.toggleRelabeling(cli.relabel_vertices());
     Graph g = b.MakeGraph();
     g.PrintStats();
 
@@ -142,6 +143,7 @@ int main(int argc, char* argv[]) {
   if (cli.out_weighted()) {
     std::cout << "Output is weighted" << std::endl;
     WeightedBuilder bw(cli);
+    bw.toggleRelabeling(cli.relabel_vertices());
     WGraph wg = bw.MakeGraph();
     wg.PrintStats();
     WeightedWriter ww(wg);
@@ -149,6 +151,7 @@ int main(int argc, char* argv[]) {
   } else {
     std::cout << "Output is not weighted" << std::endl;
     Builder b(cli);
+    b.toggleRelabeling(cli.relabel_vertices());
     Graph g = b.MakeGraph();
     g.PrintStats();
     Writer w(g);

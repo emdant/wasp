@@ -248,6 +248,7 @@ protected:
   OutputFormat out_format_;
   bool out_weighted_{false};
   bool out_largest_{false};
+  bool relabel_vertices_{false};
 
 public:
   explicit CLConverter(int argc, char** argv, std::string name)
@@ -262,12 +263,15 @@ public:
         ->default_val(false);
     app_.add_flag("-l,--lcc", out_largest_, "Only output the largest (non-strongly) connected component")
         ->default_val(false);
+    app_.add_flag("--relabel", relabel_vertices_, "Relabel vertices from 0 to |V|")
+        ->default_val(false);
   }
 
   std::string out_filename() const { return out_filename_; }
   OutputFormat out_format() const { return out_format_; }
   bool out_weighted() const { return out_weighted_; }
   bool out_largest() const { return out_largest_; }
+  bool relabel_vertices() const { return relabel_vertices_; }
 };
 
 class CLStats : public CLBase {
