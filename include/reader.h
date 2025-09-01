@@ -201,7 +201,7 @@ public:
   }
 
   /* Reads a Matrix Market file.
-      - if the Reader is unweighted: enforce the MTX file to be unweighted
+      - if the Reader is unweighted: the MTX file can be weighted, and weights will be ignored, the `needs_weight` flag will be false.
       - if the Reader in weighted: the MTX file can be unweighted, and the `needs_weight` flag will be true.
     Converts vertex numbering from 1..N to 0..N-1
   */
@@ -223,19 +223,17 @@ public:
       std::exit(-23);
     }
 
+    bool ignore_weights = false;
     bool has_weights;
     if (field == "pattern") {
       has_weights = false;
     } else if ((field == "real") || (field == "double") || (field == "integer")) {
       has_weights = true;
+      if (!WEIGHTED_READER)
+        ignore_weights = true;
     } else {
       std::cout << "unrecognized field type for .mtx" << std::endl;
       std::exit(-24);
-    }
-
-    if (has_weights && !WEIGHTED_READER) {
-      std::cout << "Trying to read weights using a non-weighted Builder, use WeightedBuilder." << std::endl;
-      std::exit(-1);
     }
 
     if (symmetry == "symmetric") {
@@ -271,7 +269,7 @@ public:
       std::istringstream edge_stream(line);
       NodeID_ u;
       edge_stream >> u;
-      if (has_weights) {
+      if (has_weights && !ignore_weights) {
         NodeWeight<NodeID_, WeightT_> v;
         edge_stream >> v;
         v.v -= 1;
@@ -280,6 +278,8 @@ public:
         NodeID_ v;
         edge_stream >> v;
         result.el.push_back(Edge(u - 1, v - 1));
+        if (ignore_weights)
+          edge_stream.ignore(200, '\n');
       }
     }
 
@@ -336,10 +336,6 @@ public:
       std::cout << ".sg not allowed for weighted graphs" << std::endl;
       std::exit(-5);
     }
-    if (weighted && std::is_same<NodeID_, DestID_>::value) {
-      std::cout << ".wsg only allowed for weighted graphs" << std::endl;
-      std::exit(-5);
-    }
 
     std::ifstream file(filename_);
     if (!file.is_open()) {
@@ -363,13 +359,28 @@ public:
     std::streamsize num_index_bytes = (num_nodes + 1) * sizeof(SGOffset);
     std::streamsize num_neigh_bytes = num_edges * sizeof(DestID_);
     file.read(reinterpret_cast<char*>(offsets.data()), num_index_bytes);
-    file.read(reinterpret_cast<char*>(neighs), num_neigh_bytes);
+    if (!(WEIGHTED_READER != weighted)) { // weighted reader and weighted graph or unweighted reader and unweighted graph
+      file.read(reinterpret_cast<char*>(neighs), num_neigh_bytes);
+    } else { // unweighted reader and weighted graph, the opposite is not possible (exited early)
+      for (SGOffset i = 0; i < num_edges; i++) {
+        file.read(reinterpret_cast<char*>(neighs + i), sizeof(NodeID_));
+        file.ignore(sizeof(WeightT_)); // will be 32-bit anyway
+      }
+    }
 
     index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, neighs);
     if (directed && invert) {
       inv_neighs = new DestID_[num_edges];
       file.read(reinterpret_cast<char*>(offsets.data()), num_index_bytes);
-      file.read(reinterpret_cast<char*>(inv_neighs), num_neigh_bytes);
+      if (!(WEIGHTED_READER != weighted)) { // weighted reader and weighted graph or unweighted reader and unweighted graph
+        file.read(reinterpret_cast<char*>(inv_neighs), num_neigh_bytes);
+      } else { // unweighted reader and weighted graph, the opposite is not possible (exited early)
+        for (SGOffset i = 0; i < num_edges; i++) {
+          file.read(reinterpret_cast<char*>(inv_neighs + i), sizeof(NodeID_));
+          file.ignore(sizeof(WeightT_)); // will be 32-bit anyway
+        }
+      }
+
       inv_index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, inv_neighs);
     }
     file.close();
