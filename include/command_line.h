@@ -165,7 +165,11 @@ public:
   virtual ~CLBase() = default;
 
   void parse() {
-    app_.parse(argc_, argv_);
+    try {
+      app_.parse(argc_, argv_);
+    } catch (const CLI::ParseError& e) {
+      std::exit(app_.exit(e));
+    }
     print_config(app_);
   }
 
@@ -202,11 +206,14 @@ public:
 
 class CLTraversal : public CLApp {
 protected:
+  std::string sources_file_;
   int64_t start_vertex_{-1};
   int num_sources_{1};
 
 public:
   explicit CLTraversal(int argc, char** argv, std::string name) : CLApp(argc, argv, name) {
+    app_.add_option("-s,--sources", sources_file_, "Load sources from file")
+        ->default_val("");
     app_.add_option("-r,--start-vertex", start_vertex_, "Start traversal from vertex")
         ->default_val(-1) // -1 indicates not set by user
         ->default_str("randomly generated");
@@ -214,6 +221,7 @@ public:
         ->default_val(1);
   }
 
+  std::string sources_filename() const { return sources_file_; }
   int64_t start_vertex() const { return start_vertex_; }
   int num_sources() const { return num_sources_; }
   bool start_vertex_is_set() const {
@@ -247,7 +255,6 @@ protected:
   std::string out_filename_;
   OutputFormat out_format_;
   bool out_weighted_{false};
-  bool out_largest_{false};
   bool relabel_vertices_{false};
 
 public:
@@ -261,17 +268,28 @@ public:
 
     app_.add_flag("-w,--weighted", out_weighted_, "Make output weighted")
         ->default_val(false);
-    app_.add_flag("-l,--lcc", out_largest_, "Only output the largest (non-strongly) connected component")
-        ->default_val(false);
-    app_.add_flag("--relabel", relabel_vertices_, "Relabel vertices from 0 to |V|")
+    app_.add_flag("--relabel", relabel_vertices_, "Relabel vertices from 0 to |V|-1")
         ->default_val(false);
   }
 
   std::string out_filename() const { return out_filename_; }
   OutputFormat out_format() const { return out_format_; }
   bool out_weighted() const { return out_weighted_; }
-  bool out_largest() const { return out_largest_; }
   bool relabel_vertices() const { return relabel_vertices_; }
+};
+
+class CLSources : public CLBase {
+protected:
+  std::string out_filename_;
+
+public:
+  explicit CLSources(int argc, char** argv, std::string name)
+      : CLBase(argc, argv, name) {
+    app_.add_option("-o,--output", out_filename_, "Output sources to this file")
+        ->required();
+  }
+
+  std::string out_filename() const { return out_filename_; }
 };
 
 class CLStats : public CLBase {

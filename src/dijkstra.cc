@@ -64,10 +64,20 @@ int main(int argc, char* argv[]) {
 
   WeightedBuilder b(cli);
   WGraph g = b.MakeGraph();
-  SourcePicker<WGraph> sp(g, cli);
+
+  SourcePicker sp(g, cli);
+  std::vector<NodeID> sources;
+
+  if (cli.sources_filename() != "") {
+    SReader sr(cli.sources_filename());
+    sources = sr.ReadSources();
+  } else {
+    for (auto i = 0; i < cli.num_sources(); i++)
+      sources.push_back(sp.PickNext());
+  }
 
   for (auto i = 0; i < cli.num_sources(); i++) {
-    auto source = sp.PickNext();
+    auto source = sources[i];
     std::cout << "Source: " << source << std::endl;
 
     auto SSSPBound = [&sp, &cli, source](const WGraph& g) {

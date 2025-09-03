@@ -11,6 +11,7 @@
 #include <sstream>
 #include <string>
 #include <type_traits>
+#include <vector>
 
 #include "graph.h"
 #include "parallel/vector.h"
@@ -392,6 +393,36 @@ public:
       return CSRGraph<NodeID_, DestID_, invert>(num_nodes, index, neighs, inv_index, inv_neighs);
     else
       return CSRGraph<NodeID_, DestID_, invert>(num_nodes, index, neighs);
+  }
+};
+
+template <typename NodeID_>
+class SourcesReader {
+  std::string filename_;
+
+public:
+  explicit SourcesReader(std::string filename) : filename_(filename) {
+    if (filename == "") {
+      std::cout << "No sources filename given (Use -h for help)" << std::endl;
+      std::exit(-8);
+    }
+  }
+
+  std::vector<NodeID_> ReadSources() {
+    std::ifstream file(filename_);
+    if (!file.is_open()) {
+      std::cout << "Couldn't open file " << filename_ << std::endl;
+      std::exit(-2);
+    }
+
+    std::vector<NodeID_> sources;
+    while (!file.eof()) {
+      NodeID_ source;
+      file >> source;
+      sources.push_back(source);
+    }
+
+    return sources;
   }
 };
 

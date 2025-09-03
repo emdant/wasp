@@ -140,17 +140,26 @@ bool BFSVerifier(const Graph& g, NodeID source, parallel::atomics_array<bfs_pair
 }
 
 int main(int argc, char* argv[]) {
-  CLDelta<int> cli(argc, argv, "breadth-first search");
-  if (!cli.ParseArgs())
-    return -1;
+  CLDelta<WeightT> cli(argc, argv, "breadth-first search");
+  cli.parse();
+
   Builder b(cli);
   Graph g = b.MakeGraph();
   g.PrintStats();
 
-  SourcePicker<Graph> sp(g, cli);
+  SourcePicker sp(g, cli);
+  std::vector<NodeID> sources;
+
+  if (cli.sources_filename() != "") {
+    SReader sr(cli.sources_filename());
+    sources = sr.ReadSources();
+  } else {
+    for (auto i = 0; i < cli.num_sources(); i++)
+      sources.push_back(sp.PickNext());
+  }
 
   for (auto i = 0; i < cli.num_sources(); i++) {
-    auto source = sp.PickNext();
+    auto source = sources[i];
     std::cout << "Source: " << source << std::endl;
 
     auto BFSBound = [&cli, source](const Graph& g) {

@@ -49,6 +49,8 @@ typedef BuilderBase<NodeID, WNode, WeightT> WeightedBuilder;
 typedef WriterBase<NodeID, NodeID> Writer;
 typedef WriterBase<NodeID, WNode> WeightedWriter;
 
+typedef SourcesReader<NodeID> SReader;
+
 // Used to pick random non-zero degree starting points for search algorithms
 template <typename GraphT_>
 class SourcePicker {

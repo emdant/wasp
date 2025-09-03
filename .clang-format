@@ -3,3 +3,4 @@ ColumnLimit: 0
 IndentWidth: 2
 AlignAfterOpenBracket: BlockIndent
 PointerAlignment: Left
+AllowShortIfStatementsOnASingleLine: AllIfsAndElse
