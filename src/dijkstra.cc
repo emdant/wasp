@@ -64,6 +64,7 @@ int main(int argc, char* argv[]) {
 
   WeightedBuilder b(cli);
   WGraph g = b.MakeGraph();
+  g.PrintStats();
 
   SourcePicker sp(g, cli);
   std::vector<NodeID> sources;

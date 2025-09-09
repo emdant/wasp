@@ -159,4 +159,58 @@ public:
   }
 };
 
+template <typename NodeID_, typename WeightT_>
+class WeightsWriter {
+  using Graph = CSRGraph<NodeID_, NodeWeight<NodeID_, WeightT_>>;
+
+  const Graph& g_;
+
+public:
+  explicit WeightsWriter(const Graph& g) : g_(g) {}
+
+  void WriteWeights(std::string filename) {
+    if (filename == "") {
+      std::cout << "No output filename given (Use -h for help)" << std::endl;
+      std::exit(-8);
+    }
+    std::fstream file(filename, std::ios::out | std::ios::binary);
+    if (!file) {
+      std::cout << "Couldn't write to file " << filename << std::endl;
+      std::exit(-5);
+    }
+
+    file << std::setprecision(std::numeric_limits<float>::max_digits10);
+    for (NodeID_ i = 0; i < g_.num_nodes(); i++) {
+      for (NodeWeight<NodeID_, WeightT_>& nw : g_.out_neigh(i)) {
+        file << nw.w << std::endl;
+      }
+    }
+
+    file.close();
+    std::cout << "Weights written to file " << filename << std::endl;
+  }
+
+  void WriteWeightsSerialized(std::string filename) {
+    if (filename == "") {
+      std::cout << "No output filename given (Use -h for help)" << std::endl;
+      std::exit(-8);
+    }
+    std::fstream file(filename, std::ios::out | std::ios::binary);
+    if (!file) {
+      std::cout << "Couldn't write to file " << filename << std::endl;
+      std::exit(-5);
+    }
+
+    file << std::setprecision(std::numeric_limits<float>::max_digits10);
+    for (NodeID_ i = 0; i < g_.num_nodes(); i++) {
+      for (NodeWeight<NodeID_, WeightT_>& nw : g_.out_neigh(i)) {
+        file.write(reinterpret_cast<char*>(&nw.w), sizeof(WeightT_));
+      }
+    }
+
+    file.close();
+    std::cout << "Weights written to file " << filename << std::endl;
+  }
+};
+
 #endif // WRITER_H_
