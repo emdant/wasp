@@ -115,7 +115,8 @@ protected:
   char** argv_;
 
   // Member variables to hold the parsed option values
-  std::string filename_{""};
+  std::string graph_filename_{""};
+  std::string weights_filename_{""};
   bool in_place_{false};
   bool symmetrize_{false};
   GraphGenerator gen_{GraphGenerator::NO_GEN};
@@ -129,8 +130,12 @@ public:
   explicit CLBase(int argc, char** argv, std::string name)
       : app_(name), argc_(argc), argv_(argv) {
     auto graph_input_group = app_.add_option_group("graph");
-    graph_input_group->add_option("-f,--filename", filename_, "Load graph from file")
-        ->default_val("");
+    auto gfname = graph_input_group->add_option("-f,--graph-filename", graph_filename_, "Load graph from file")
+                      ->default_val("");
+
+    app_.add_option("-w,--weights-filename", weights_filename_, "Load weights from file")
+        ->default_val("")
+        ->needs(gfname);
 
     app_.add_flag("--symmetrize", symmetrize_, "Symmetrize input edge list")
         ->default_val(false);
@@ -173,7 +178,8 @@ public:
     print_config(app_);
   }
 
-  std::string filename() const { return filename_; }
+  std::string graph_filename() const { return graph_filename_; }
+  std::string weights_filename() const { return weights_filename_; }
   bool symmetrize() const { return symmetrize_; }
   bool in_place() const { return in_place_; }
   GraphGenerator graph_generator() const { return gen_; }
@@ -266,7 +272,7 @@ public:
         ->required()
         ->transform(CLI::CheckedTransformer(format_map_, CLI::ignore_case));
 
-    app_.add_flag("-w,--weighted", out_weighted_, "Make output weighted")
+    app_.add_flag("--weighted", out_weighted_, "Make output weighted")
         ->default_val(false);
     app_.add_flag("--relabel", relabel_vertices_, "Relabel vertices from 0 to |V|-1")
         ->default_val(false);

@@ -15,7 +15,7 @@ int main(int argc, char* argv[]) {
   CLSources cli(argc, argv, "sources");
   cli.parse();
 
-  auto suffix = GetSuffix(cli.filename());
+  auto suffix = GetSuffix(cli.graph_filename());
   if (suffix != ".mtx" && suffix != ".wsg" && suffix != ".sg") {
     std::cout << "Graph format must be one of: .mtx .wsg .sg" << std::endl;
     std::exit(-1);

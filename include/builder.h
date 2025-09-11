@@ -463,10 +463,20 @@ public:
     CSRGraph<NodeID_, DestID_, invert> g;
     { // extra scope to trigger earlier deletion of el (save memory)
       EdgeList el;
-      if (cli_.filename() != "") {
-        ReaderT r(cli_.filename());
-        if ((GetSuffix(cli_.filename()) == ".sg") || (GetSuffix(cli_.filename()) == ".wsg")) {
-          return r.ReadSerializedGraph();
+
+      if (cli_.graph_filename() != "") {
+        ReaderT r(cli_.graph_filename());
+        if (
+            (GetSuffix(cli_.graph_filename()) == ".sg") ||
+            (GetSuffix(cli_.graph_filename()) == ".wsg")
+        ) {
+          auto g = r.ReadSerializedGraph();
+          if constexpr (WEIGHTED_BUILDER)
+            if (cli_.weights_filename() != "") {
+              VectorReader<typename DestID_::WeightT> wreader(cli_.weights_filename());
+              g.ReplaceWeights(wreader.ReadSerialized());
+            }
+          return g;
         } else {
           typename ReaderT::ReadFileResult result = r.ReadFile();
           el = std::move(result.el);
@@ -474,18 +484,21 @@ public:
             symmetrize_ = true;
           needs_weights_ = result.needs_weights;
         }
-      } else if (cli_.using_generator() != -1) {
+      } else if (cli_.using_generator()) {
         Generator<NodeID_, DestID_> gen(cli_.synthetic_scale(), cli_.synthetic_scale());
         el = gen.GenerateEL(cli_.graph_generator() == GraphGenerator::UNIFORM);
+      } else {
+        std::cout << "Something went wrong. Check program arguments." << std::endl;
+        std::exit(-1);
       }
-      if (relabel_vertices_)
-        RelabelEL(el);
+
+      // edge list must be populated here
+      if (relabel_vertices_) RelabelEL(el); // Relabel vertices from 0 to |V|-1
       g = MakeGraphFromEL(el);
     }
-    if (in_place_)
-      return g;
-    else
-      return SquishGraph(g);
+
+    if (in_place_) return g;
+    else return SquishGraph(g);
   }
 
   // Relabels (and rebuilds) graph by order of decreasing degree

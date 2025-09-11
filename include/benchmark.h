@@ -13,6 +13,7 @@
 #include "builder.h"
 #include "command_line.h"
 #include "graph.h"
+#include "reader.h"
 #include "timer.h"
 #include "util.h"
 #include "writer.h"
@@ -50,6 +51,7 @@ typedef WriterBase<NodeID, NodeID> Writer;
 typedef WriterBase<NodeID, WNode> WeightedWriter;
 
 typedef VectorReader<NodeID> SReader;
+typedef VectorReader<WeightT> WReader;
 
 // Used to pick random non-zero degree starting points for search algorithms
 template <typename GraphT_>

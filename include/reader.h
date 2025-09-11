@@ -416,12 +416,18 @@ public:
       std::exit(-2);
     }
 
+    Timer t;
+    t.Start();
     std::vector<ValueT_> sources;
     while (!file.eof()) {
       ValueT_ source;
       file >> source;
       sources.push_back(source);
     }
+    file.close();
+
+    t.Stop();
+    PrintTime("Values Read Time", t.Seconds());
 
     return sources;
   }
@@ -433,14 +439,18 @@ public:
       std::exit(-2);
     }
 
+    Timer t;
+    t.Start();
     std::vector<ValueT_> values;
     int64_t num_values; // must be 64-bit value
     file.read(reinterpret_cast<char*>(&num_values), sizeof(num_values));
 
     values.resize(num_values);
     file.read(reinterpret_cast<char*>(values.data()), num_values * sizeof(ValueT_));
-
     file.close();
+
+    t.Stop();
+    PrintTime("Serialized Values Read Time", t.Seconds());
 
     return values;
   }
