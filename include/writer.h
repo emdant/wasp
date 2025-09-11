@@ -202,6 +202,10 @@ public:
     }
 
     file << std::setprecision(std::numeric_limits<float>::max_digits10);
+
+    auto num_edges = g_.num_edges();
+    file.write(reinterpret_cast<char*>(num_edges), sizeof(num_edges));
+
     for (NodeID_ i = 0; i < g_.num_nodes(); i++) {
       for (NodeWeight<NodeID_, WeightT_>& nw : g_.out_neigh(i)) {
         file.write(reinterpret_cast<char*>(&nw.w), sizeof(WeightT_));

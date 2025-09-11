@@ -6,9 +6,11 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <iostream>
 #include <istream>
 #include <type_traits>
+#include <vector>
 
 #include "parallel/vector.h"
 #include "util.h"
@@ -285,6 +287,37 @@ public:
 
   Range<NodeID_> vertices() const {
     return Range<NodeID_>(num_nodes());
+  }
+
+  template <typename WeightT_>
+  void ReplaceWeights(const std::vector<WeightT_>& weights) {
+    if constexpr (std::is_same_v<NodeID_, DestID_>) {
+      std::cout << "Replace weights is not allowed for unweighted graphs." << std::endl;
+    } else {
+      const int64_t out_edges = out_index_[num_nodes_] - out_index_[0];
+      assert(weights.size() == static_cast<size_t>(out_edges) && "weights vector has incorrect size");
+
+#pragma omp parallel for
+      for (int64_t i = 0; i < out_edges; i++) {
+        out_neighbors_[i].w = weights[i];
+      }
+
+      if (directed_ && MakeInverse) {
+#pragma omp parallel for
+        for (NodeID i = 0; i < num_nodes_; i++) {
+          DestID_* out_list = out_index_[i];
+          std::size_t deg = out_index_[i + 1] - out_index_[i];
+          for (std::size_t j = 0; j < deg; j++) {
+            DestID_ out_edge = out_list[j];
+
+            DestID_* in_list = in_index_[out_edge.v];
+            while ((*in_list).v != i)
+              in_list++;
+            (*in_list).w = out_edge.w;
+          }
+        }
+      }
+    }
   }
 
 private:

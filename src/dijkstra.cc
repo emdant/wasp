@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
 
   if (cli.sources_filename() != "") {
     SReader sr(cli.sources_filename());
-    sources = sr.ReadSources();
+    sources = sr.Read();
   } else {
     for (auto i = 0; i < cli.num_sources(); i++)
       sources.push_back(sp.PickNext());
