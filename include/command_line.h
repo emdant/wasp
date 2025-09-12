@@ -89,7 +89,7 @@ private:
     std::cout << "------ Configuration ------" << std::endl;
 
     auto group = app.get_option_group("graph");
-    auto filename_opt = group->get_option("--filename");
+    auto filename_opt = group->get_option("--graph-filename");
 
     auto options = app.get_options();
     if (!filename_opt->empty()) {
@@ -117,7 +117,6 @@ protected:
   // Member variables to hold the parsed option values
   std::string graph_filename_{""};
   std::string weights_filename_{""};
-  bool in_place_{false};
   bool symmetrize_{false};
   GraphGenerator gen_{GraphGenerator::NO_GEN};
   int gen_scale_{16};
@@ -138,8 +137,6 @@ public:
         ->needs(gfname);
 
     app_.add_flag("--symmetrize", symmetrize_, "Symmetrize input edge list")
-        ->default_val(false);
-    app_.add_flag("--in-place", in_place_, "Reduces memory usage during graph building")
         ->default_val(false);
     app_.add_flag("--override-weights", override_weights_, "Override existing weights with generated ones")
         ->default_val(false);
@@ -181,7 +178,6 @@ public:
   std::string graph_filename() const { return graph_filename_; }
   std::string weights_filename() const { return weights_filename_; }
   bool symmetrize() const { return symmetrize_; }
-  bool in_place() const { return in_place_; }
   GraphGenerator graph_generator() const { return gen_; }
   int synthetic_scale() const { return gen_scale_; }
   int synthetic_degree() const { return gen_degree_; }
@@ -284,14 +280,14 @@ public:
   bool relabel_vertices() const { return relabel_vertices_; }
 };
 
-class CLSources : public CLBase {
+class CLExport : public CLBase {
 protected:
   std::string out_filename_;
 
 public:
-  explicit CLSources(int argc, char** argv, std::string name)
+  explicit CLExport(int argc, char** argv, std::string name)
       : CLBase(argc, argv, name) {
-    app_.add_option("-o,--output", out_filename_, "Output sources to this file")
+    app_.add_option("-o,--output", out_filename_, "Output exported data to this file")
         ->required();
   }
 

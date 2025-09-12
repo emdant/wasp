@@ -1,4 +1,5 @@
 create_typed_target(converter converter.cc)
-create_typed_target(weight weight.cc)
-create_typed_target(degree degree.cc)
+create_typed_target(hist-weight hist-weight.cc)
+create_typed_target(hist-degree hist-degree.cc)
 create_typed_target(sources sources.cc)
+create_typed_target(weights weights.cc)

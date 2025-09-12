@@ -49,17 +49,17 @@ bool test_low_and_clear(T& value) {
 static const int64_t kRandSeed = 27491095;
 
 inline void PrintLabel(const std::string& label, const std::string& val) {
-  printf("%-21s%7s\n", (label + ":").c_str(), val.c_str());
+  printf("%-21s%7s\n", (label + ": ").c_str(), val.c_str());
   fflush(stdout);
 }
 
 inline void PrintTime(const std::string& s, double seconds) {
-  printf("%-21s%3.5lf\n", (s + ":").c_str(), seconds);
+  printf("%-21s%3.5lf\n", (s + ": ").c_str(), seconds);
   fflush(stdout);
 }
 
 inline void PrintStep(const std::string& s, int64_t count) {
-  printf("%-14s%14" PRId64 "\n", (s + ":").c_str(), count);
+  printf("%-14s%14" PRId64 "\n", (s + ": ").c_str(), count);
   fflush(stdout);
 }
 

@@ -12,7 +12,7 @@
 using namespace std;
 
 int main(int argc, char* argv[]) {
-  CLSources cli(argc, argv, "sources");
+  CLExport cli(argc, argv, "sources");
   cli.parse();
 
   auto suffix = GetSuffix(cli.graph_filename());
