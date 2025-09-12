@@ -24,7 +24,7 @@ int main(int argc, char* argv[]) {
     degree_hist[g.out_degree(i)].fetch_add(1);
   }
 
-  std::string graph_name = std::filesystem::path(cli.filename()).filename().stem().string();
+  std::string graph_name = std::filesystem::path(cli.graph_filename()).filename().stem().string();
   std::filesystem::path out_dir = std::filesystem::path(cli.out_directory());
 
   std::ofstream weights_file;
