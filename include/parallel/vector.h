@@ -5,6 +5,7 @@
 #define PARALLEL_VECTOR_H_
 
 #include <algorithm>
+#include <type_traits>
 
 /*
 GAP Benchmark Suite
@@ -19,7 +20,7 @@ Vector class with ability to not initialize or do initialization in parallel
 
 namespace parallel {
 
-template <typename T>
+template <typename T, typename = std::enable_if_t<std::is_trivial_v<T>>>
 class vector {
 public:
   typedef T* iterator;

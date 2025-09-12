@@ -33,7 +33,7 @@ struct NodeWeight {
 
   NodeID_ v;
   WeightT_ w;
-  NodeWeight() {}
+  NodeWeight() = default;
   NodeWeight(NodeID_ v) : v(v), w(1) {}
   NodeWeight(NodeID_ v, WeightT_ w) : v(v), w(w) {}
 
@@ -86,7 +86,7 @@ struct EdgePair {
   SrcT u;
   DstT v;
 
-  EdgePair() {}
+  EdgePair() = default;
 
   EdgePair(SrcT u, DstT v) : u(u), v(v) {}
 
