@@ -5,6 +5,7 @@
 #define BENCHMARK_H_
 
 #include <algorithm>
+#include <cstddef>
 #include <functional>
 #include <random>
 #include <utility>
@@ -57,20 +58,29 @@ typedef VectorReader<WeightT> WReader;
 template <typename GraphT_>
 class SourcePicker {
 public:
-  explicit SourcePicker(const GraphT_& g)
-      : given_source_(-1),
+  explicit SourcePicker(const GraphT_& g, std::string filename = "", NodeID source = -1)
+      : g_(g),
+        given_source_(source),
         rng_(kRandSeed),
-        udist_(g.num_nodes() - 1, rng_), g_(g) {}
-
-  explicit SourcePicker(const GraphT_& g, const CLTraversal& cli)
-      : given_source_(cli.start_vertex()),
-        rng_(kRandSeed),
-        udist_(g.num_nodes() - 1, rng_), g_(g) {}
+        udist_(g.num_nodes() - 1, rng_) {
+    if (filename != "") {
+      VectorReader<NodeID> reader(filename);
+      file_sources_ = reader.Read();
+    }
+  }
 
   NodeID PickNext() {
+    // Fixed source
     if (given_source_ != -1)
       return given_source_;
 
+    // File sources
+    if (!file_sources_.empty()) {
+      static size_t current = 0;
+      return file_sources_[current++];
+    }
+
+    // Random sources
     NodeID source;
     do {
       source = udist_();
@@ -81,6 +91,7 @@ public:
 
 private:
   NodeID given_source_;
+  std::vector<NodeID> file_sources_;
   std::mt19937_64 rng_;
   UniDist<NodeID, std::mt19937_64> udist_;
   const GraphT_& g_;
@@ -138,7 +149,8 @@ void BenchmarkKernel(const CLApp& cli, const GraphT_& g, GraphFunc kernel, Analy
 
     std::cout << std::endl;
   }
-  PrintTime("Average Time", total_seconds / cli.num_trials());
+  if (cli.num_trials() != 1)
+    PrintTime("Average Time", total_seconds / cli.num_trials());
   std::cout << std::endl;
 }
 

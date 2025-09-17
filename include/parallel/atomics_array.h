@@ -36,6 +36,8 @@ public:
   std::atomic<T>* end() { return data_ + size_; }
   const std::atomic<T>* begin() const { return data_; }
   const std::atomic<T>* end() const { return data_ + size_; }
+
+  const std::size_t size() const { return size_; }
 };
 
 }; // namespace parallel

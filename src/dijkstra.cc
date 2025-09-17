@@ -16,15 +16,18 @@ const size_t kMaxBin = numeric_limits<size_t>::max() / 2;
 const size_t kBinSizeThreshold = 1000;
 
 void PrintSSSPStats(const WGraph& g, const vector<WeightT>& dist) {
-  auto NotInf = [](WeightT d) { return d != kDistInf; };
-  int64_t num_reached = count_if(dist.begin(), dist.end(), NotInf);
-  cout << "SSSP Tree reaches " << num_reached << " nodes" << endl;
-
   WeightT max_dist = 0;
-  for (auto i = 0; i < g.num_nodes(); i++)
+  int64_t num_reached = 0;
+
+#pragma omp parallel for reduction(+ : num_reached) reduction(max : max_dist)
+  for (size_t i = 0; i < dist.size(); i++) {
     if (dist[i] != kDistInf && dist[i] > max_dist)
       max_dist = dist[i];
+    if (dist[i] != kDistInf)
+      num_reached++;
+  }
 
+  cout << "SSSP Tree reaches " << num_reached << " nodes" << endl;
   cout << "Max dist " << max_dist << endl;
 }
 
@@ -66,19 +69,11 @@ int main(int argc, char* argv[]) {
   WGraph g = b.MakeGraph();
   g.PrintStats();
 
-  SourcePicker sp(g, cli);
+  SourcePicker sp(g, cli.sources_filename(), cli.start_vertex());
   std::vector<NodeID> sources;
 
-  if (cli.sources_filename() != "") {
-    SReader sr(cli.sources_filename());
-    sources = sr.Read();
-  } else {
-    for (auto i = 0; i < cli.num_sources(); i++)
-      sources.push_back(sp.PickNext());
-  }
-
   for (auto i = 0; i < cli.num_sources(); i++) {
-    auto source = sources[i];
+    auto source = sp.PickNext();
     std::cout << "Source: " << source << std::endl;
 
     auto SSSPBound = [&sp, &cli, source](const WGraph& g) {

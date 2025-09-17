@@ -147,19 +147,10 @@ int main(int argc, char* argv[]) {
   Graph g = b.MakeGraph();
   g.PrintStats();
 
-  SourcePicker sp(g, cli);
-  std::vector<NodeID> sources;
-
-  if (cli.sources_filename() != "") {
-    SReader sr(cli.sources_filename());
-    sources = sr.Read();
-  } else {
-    for (auto i = 0; i < cli.num_sources(); i++)
-      sources.push_back(sp.PickNext());
-  }
+  SourcePicker sp(g, cli.sources_filename(), cli.start_vertex());
 
   for (auto i = 0; i < cli.num_sources(); i++) {
-    auto source = sources[i];
+    auto source = sp.PickNext();
     std::cout << "Source: " << source << std::endl;
 
     auto BFSBound = [&cli, source](const Graph& g) {
