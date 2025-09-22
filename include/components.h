@@ -1,6 +1,7 @@
 #ifndef COMPONENTS_H_
 #define COMPONENTS_H_
 
+#include <cstdlib>
 #include <functional>
 #include <random>
 #include <stack>
@@ -138,7 +139,10 @@ private:
         sample_counts.begin(), sample_counts.end(),
         [](const kvp_type& a, const kvp_type& b) { return a.second < b.second; }
     );
-    float frac_of_graph = static_cast<float>(most_frequent->second) / num_samples;
+    if (most_frequent == sample_counts.end()) {
+      std::cout << "failed sampling" << std::endl;
+      std::exit(-1);
+    }
     return most_frequent->first;
   }
 

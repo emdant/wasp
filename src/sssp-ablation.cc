@@ -271,7 +271,7 @@ parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, int32
   //   return LeavesDS<false, true>(g, source, delta);
 }
 
-void PrintSSSPStats(const WGraph& g, const parallel::atomics_array<WeightT>& dist) {
+void PrintSSSPStats([[maybe_unused]] const WGraph& g, const parallel::atomics_array<WeightT>& dist) {
   WeightT max_dist = 0;
   int64_t num_reached = 0;
 

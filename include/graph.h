@@ -34,8 +34,8 @@ struct NodeWeight {
   NodeID_ v;
   WeightT_ w;
   NodeWeight() = default;
-  NodeWeight(NodeID_ v) : v(v), w(1) {}
-  NodeWeight(NodeID_ v, WeightT_ w) : v(v), w(w) {}
+  NodeWeight(NodeID_ vv) : v(vv), w(1) {}
+  NodeWeight(NodeID_ vv, WeightT_ ww) : v(vv), w(ww) {}
 
   NodeWeight& operator+=(const int rhs) {
     v += rhs;
@@ -88,7 +88,7 @@ struct EdgePair {
 
   EdgePair() = default;
 
-  EdgePair(SrcT u, DstT v) : u(u), v(v) {}
+  EdgePair(SrcT uu, DstT vv) : u(uu), v(vv) {}
 
   bool operator<(const EdgePair& rhs) const {
     return u == rhs.u ? v < rhs.v : u < rhs.u;

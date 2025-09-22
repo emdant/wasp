@@ -46,7 +46,7 @@ public:
         delete std::exchange(local_chunk_, nullptr);
       }
 
-      return std::move(ret);
+      return ret;
     }
 
     local_chunk_ = deque_.pop();
@@ -56,7 +56,7 @@ public:
       if (local_chunk_->empty()) {
         delete std::exchange(local_chunk_, nullptr);
       }
-      return std::move(ret);
+      return ret;
     }
 
     // deque was empty

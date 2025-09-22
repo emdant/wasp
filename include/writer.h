@@ -4,6 +4,7 @@
 #ifndef WRITER_H_
 #define WRITER_H_
 
+#include <cstddef>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -42,7 +43,7 @@ public:
     std::stringstream buffer;
 
     // MM header
-    buffer << "\%\%MatrixMarket matrix coordinate ";
+    buffer << "%%MatrixMarket matrix coordinate ";
     if constexpr (std::is_same_v<NodeID_, DestID_>)
       buffer << "pattern ";
     else if constexpr (std::is_integral_v<typename DestID_::WeightT>)
@@ -64,7 +65,7 @@ public:
         if (g_.directed() || u < v)
           buffer << u + 1 << " " << v + 1 << std::endl;
 
-      if ((size_t)buffer.tellp() >= THRESHOLD) {
+      if (static_cast<size_t>(buffer.tellp()) >= THRESHOLD) {
         out << buffer.rdbuf();
         std::stringstream().swap(buffer);
       }
@@ -150,7 +151,7 @@ public:
       std::exit(-5);
     }
 
-    for (auto i = 0; i < sources_.size(); i++) {
+    for (std::size_t i = 0; i < sources_.size(); i++) {
       file << sources_[i] << std::endl;
     }
 

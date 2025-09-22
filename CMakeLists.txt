@@ -18,7 +18,7 @@ endif()
 add_library(wasp INTERFACE)
 target_include_directories(wasp INTERFACE "include")
 target_include_directories(wasp INTERFACE "extern")
-target_compile_options(wasp INTERFACE "-Wno-interference-size")
+target_compile_options(wasp INTERFACE -Wall -Wextra -Wpedantic -Wno-interference-size -Wshadow -Wnull-dereference -Wduplicated-branches -Wduplicated-cond -Wold-style-cast -Wnon-virtual-dtor -Woverloaded-virtual -Wnull-dereference)
 target_compile_options(wasp INTERFACE "-march=native")
 target_link_libraries(wasp INTERFACE "numa")
 

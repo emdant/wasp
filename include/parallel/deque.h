@@ -18,36 +18,36 @@ namespace parallel {
 template <typename DataT>
 class deque {
 
-  struct ring_buffer {
+  class ring_buffer {
+    int64_t cap_;
+    int64_t mask_;
+    std::atomic<DataT>* buf_;
 
-    int64_t cap;
-    int64_t mask;
-    std::atomic<DataT>* buf;
-
+  public:
     explicit ring_buffer(int64_t cap)
-        : cap{cap},
-          mask{cap - 1},
-          buf{new std::atomic<DataT>[static_cast<size_t>(cap)]} {
+        : cap_{cap},
+          mask_{cap - 1},
+          buf_{new std::atomic<DataT>[static_cast<size_t>(cap)]} {
     }
 
     ~ring_buffer() {
-      delete[] buf;
+      delete[] buf_;
     }
 
     int64_t capacity() const noexcept {
-      return cap;
+      return cap_;
     }
 
     void push(int64_t i, DataT o) noexcept {
-      buf[i & mask].store(o, std::memory_order_relaxed);
+      buf_[i & mask_].store(o, std::memory_order_relaxed);
     }
 
     DataT pop(int64_t i) noexcept {
-      return buf[i & mask].load(std::memory_order_relaxed);
+      return buf_[i & mask_].load(std::memory_order_relaxed);
     }
 
     ring_buffer* resize(int64_t b, int64_t t, int delta) {
-      ring_buffer* ptr = new ring_buffer{(1 << delta) * cap};
+      ring_buffer* ptr = new ring_buffer{(1 << delta) * cap_};
       for (int64_t i = t; i != b; ++i) {
         ptr->push(i, pop(i));
       }

@@ -12,7 +12,7 @@
 
 namespace bucketing {
 
-using priority_level = std::int64_t;
+using priority_level = std::uint64_t;
 constexpr inline priority_level EMPTY_BUCKETS = std::numeric_limits<std::int64_t>::max() / 2;
 
 struct node_prio {

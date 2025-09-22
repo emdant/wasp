@@ -50,8 +50,8 @@ public:
       if (in_deg == 1 && out_deg == 0)
         leaves.set(node);
       else if (in_deg == 1 && out_deg == 1) {
-        NodeID in_src = (NodeID)g.in_index()[node][0];
-        NodeID out_dst = (NodeID)g.out_index()[node][0];
+        NodeID in_src = static_cast<NodeID>(g.in_index()[node][0]);
+        NodeID out_dst = static_cast<NodeID>(g.out_index()[node][0]);
         if (in_src == out_dst)
           leaves.set(node);
       }
@@ -71,14 +71,14 @@ class is_leaf<GraphT, true, false> {
 public:
   is_leaf(const GraphT& g) : g_(g) {}
 
-  bool operator()(NodeID n) const {
-    auto in_deg = g_.in_degree(n);
-    auto out_deg = g_.out_degree(n);
+  bool operator()(NodeID node) const {
+    auto in_deg = g_.in_degree(node);
+    auto out_deg = g_.out_degree(node);
     if (in_deg == 1 && out_deg == 0)
       return true;
     else if (in_deg == 1 && out_deg == 1) {
-      NodeID in_src = (NodeID)g_.in_index()[n][0];
-      NodeID out_dst = (NodeID)g_.out_index()[n][0];
+      NodeID in_src = static_cast<NodeID>(g_.in_index()[node][0]);
+      NodeID out_dst = static_cast<NodeID>(g_.out_index()[node][0]);
       if (in_src == out_dst)
         return true;
     }

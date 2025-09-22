@@ -44,7 +44,7 @@ public:
   }
 
   priority_level first_nonempty() const {
-    for (auto i = 0; i < buckets_.size(); i++) {
+    for (std::size_t i = 0; i < buckets_.size(); i++) {
       if (!buckets_[i].empty()) {
         return i;
       }

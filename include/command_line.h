@@ -155,9 +155,9 @@ public:
                   ->default_val(WeightGenerator::NO_GEN)
                   ->transform(CLI::CheckedTransformer(weight_map_, CLI::ignore_case));
 
-    auto wr = app_.add_option("--weight-range", weight_range_, "Range [a, b) of the uniform distribution")
-                  ->needs(wt)
-                  ->expected(0, 2);
+    app_.add_option("--weight-range", weight_range_, "Range [a, b) of the uniform distribution")
+        ->needs(wt)
+        ->expected(0, 2);
 
     synthetic_gen->needs(wt);
 
@@ -227,7 +227,7 @@ public:
   int64_t start_vertex() const { return start_vertex_; }
   int num_sources() const { return num_sources_; }
   bool start_vertex_is_set() const {
-    return app_.count("--start-vertex") >= 0;
+    return app_.count("--start-vertex") > 0;
   }
 };
 

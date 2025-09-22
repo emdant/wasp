@@ -20,33 +20,33 @@ public:
 
   // chunk() = default;
 
-  chunk(PrioT priority)
+  chunk(PrioT p)
       : head_(0),
         tail_(0),
-        priority(priority) {}
+        priority(p) {}
 
-  chunk(DataT value, PrioT priority)
+  chunk(DataT v, PrioT p)
       : head_(0),
         tail_(0),
-        priority(priority) {
-    data_[0] = value;
+        priority(p) {
+    data_[0] = v;
     tail_++;
   }
-  chunk(DataT value, PrioT priority, chunk* next)
+  chunk(DataT v, PrioT p, chunk* n)
       : head_(0),
         tail_(0),
-        priority(priority),
-        next(next) {
-    data_[0] = value;
+        priority(p),
+        next(n) {
+    data_[0] = v;
     tail_++;
   }
-  chunk(DataT value, PrioT priority, std::int64_t begin, std::int64_t end)
+  chunk(DataT v, PrioT p, std::int64_t b, std::int64_t e)
       : head_(0),
         tail_(0),
-        priority(priority),
-        begin(begin),
-        end(end) {
-    data_[0] = value;
+        priority(p),
+        begin(b),
+        end(e) {
+    data_[0] = v;
     tail_++;
   }
 
@@ -94,21 +94,6 @@ public:
 
 private:
   DataT data_[N];
-};
-
-template <typename DataT, typename PrioT>
-class chunk<DataT, PrioT, 1> {
-public:
-  using value_type = DataT;
-  using priority_type = PrioT;
-  static constexpr int capacity = 1;
-
-  chunk() = default;
-  chunk(DataT data, PrioT priority)
-      : data(data), priority(priority) {}
-
-  DataT data;
-  PrioT priority;
 };
 
 }; // namespace containers

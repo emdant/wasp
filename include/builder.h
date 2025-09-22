@@ -204,7 +204,7 @@ private:
       if (symmetrize_ || (!symmetrize_ && !transpose))
         fetch_and_add(degrees[e.u], 1);
       if (!symmetrize_ && transpose)
-        fetch_and_add(degrees[(NodeID_)e.v], 1);
+        fetch_and_add(degrees[static_cast<NodeID_>(e.v)], 1);
     }
     return degrees;
   }

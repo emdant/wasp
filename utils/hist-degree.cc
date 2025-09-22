@@ -1,4 +1,5 @@
 #include <atomic>
+#include <cstddef>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -30,7 +31,7 @@ int main(int argc, char* argv[]) {
   std::ofstream weights_file;
   weights_file.open(out_dir / (graph_name + "_degree.csv"s));
   weights_file << "degree," << "frequency\n";
-  for (auto i = 0; i < degree_hist.size(); i++) {
+  for (std::size_t i = 0; i < degree_hist.size(); i++) {
     if (degree_hist[i] > 0)
       weights_file << i << "," << degree_hist[i] << "\n";
   }

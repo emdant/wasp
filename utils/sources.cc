@@ -32,7 +32,7 @@ int main(int argc, char* argv[]) {
   std::mt19937_64 rng(kRandSeed);
   UniDist dist(g.num_nodes() - 1, rng);
 
-  const auto NUM_SOURCES = std::min(1024l, g.num_nodes());
+  const size_t NUM_SOURCES = std::min(1024l, g.num_nodes());
   std::vector<NodeID> sources;
 
   for (size_t i = 0; i < NUM_SOURCES; i++) {

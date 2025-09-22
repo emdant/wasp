@@ -1,5 +1,7 @@
 #include <atomic>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <limits>
@@ -20,7 +22,7 @@ int main(int argc, char* argv[]) {
 
 #ifndef USE_FLOAT
   // ====================== INTEGER WEIGHTS ======================
-  std::vector<std::atomic<int64_t>> weight_hist((int)4e8);
+  std::vector<std::atomic<int64_t>> weight_hist(static_cast<int64_t>(4e8));
   std::atomic<int64_t> num_zeros{0};
 
   int64_t min_w = std::numeric_limits<int64_t>::max();
@@ -107,7 +109,7 @@ int main(int argc, char* argv[]) {
 #pragma omp parallel for
   for (auto i = 0; i < g.num_nodes(); i++) {
     for (WNode wn : g.out_neigh(i)) {
-      size_t idx = std::min((size_t)((wn.w - min_w) / bucket_width), num_buckets - 1);
+      size_t idx = std::min(static_cast<size_t>((wn.w - min_w) / bucket_width), num_buckets - 1);
       weight_hist[idx].fetch_add(1);
     }
   }
@@ -122,7 +124,7 @@ int main(int argc, char* argv[]) {
   weights_file << "weight," << "frequency\n";
 
 #ifndef USE_FLOAT
-  for (auto i = 0; i < weight_hist.size(); i++) {
+  for (std::size_t i = 0; i < weight_hist.size(); i++) {
     if (weight_hist[i] > 0)
       weights_file << i << "," << weight_hist[i] << "\n";
   }

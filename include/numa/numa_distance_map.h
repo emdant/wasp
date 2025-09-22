@@ -172,8 +172,8 @@ private:
 
   std::vector<int> tid_to_numa_; // Still needed internally
   std::vector<std::vector<std::vector<int>>> thread_distance_map_;
-  int num_distances_;
   bool is_initialized_;
+  int num_distances_;
 };
 
 #endif

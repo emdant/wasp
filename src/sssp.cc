@@ -35,7 +35,8 @@ static constexpr WeightT DIST_INF = numeric_limits<WeightT>::max() / 2;
 
 template <typename GraphT, bool DIRECTED, bool CACHE_LEAVES>
 auto BestDeltaStepping(const WGraph& g, NodeID source, WeightT delta) {
-  int num_threads = omp_get_max_threads();
+  [[maybe_unused]] int num_threads = omp_get_max_threads();
+
   parallel::atomics_array<WeightT> dist(g.num_nodes(), DIST_INF);
   dist[source] = 0;
 #ifdef COUNT_RELAX
@@ -74,7 +75,7 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, WeightT delta) {
   constexpr std::int64_t MAX_DEG = 1 << 20;
 
   const auto is_stale = [&](const priority_level bucket, const NodeID u) {
-    return dist[u].load(std::memory_order_relaxed) < delta * bucket;
+    return dist[u].load(std::memory_order_relaxed) < static_cast<WeightT>(delta * bucket);
   };
 
   const auto inspect_node = [&](bucketing::chunks_frontier& my_frontier, const priority_level bucket, const NodeID u) {
@@ -91,33 +92,40 @@ auto BestDeltaStepping(const WGraph& g, NodeID source, WeightT delta) {
     return std::pair{0, MAX_DEG};
   };
 
-  const auto process_node = [&](bucketing::chunks_frontier& my_frontier, const priority_level bucket, const NodeID u, const std::int64_t begin, const std::int64_t end) {
-    auto edges = g.out_index()[u];
+  const auto process_node =
+      [&](
+          bucketing::chunks_frontier& my_frontier,
+          [[maybe_unused]] const priority_level bucket,
+          const NodeID u,
+          const std::uint64_t begin,
+          const std::uint64_t end
+      ) {
+        auto edges = g.out_index()[u];
 #ifdef COUNT_RELAX
-    auto tid = omp_get_thread_num();
+        auto tid = omp_get_thread_num();
 #endif
-    if constexpr (!DIRECTED) {
-      if ((end - begin) < hardware_constructive_interference_size / sizeof(WNode))
+        if constexpr (!DIRECTED) {
+          if ((end - begin) < hardware_constructive_interference_size / sizeof(WNode))
+            for (auto i = begin; i < end; i++) {
+#ifdef COUNT_RELAX
+              visits[tid]++;
+#endif
+              WNode wn = edges[i];
+              relax_pull_safe(wn, u);
+            }
+        }
+
         for (auto i = begin; i < end; i++) {
+          WNode wn = edges[i];
 #ifdef COUNT_RELAX
           visits[tid]++;
 #endif
-          WNode wn = edges[i];
-          relax_pull_safe(wn, u);
+          if (auto new_prio = relax_push(u, wn)) {
+            if (!is_leaf(wn.v))
+              my_frontier.push(wn.v, new_prio.value() / delta);
+          }
         }
-    }
-
-    for (auto i = begin; i < end; i++) {
-      WNode wn = edges[i];
-#ifdef COUNT_RELAX
-      visits[tid]++;
-#endif
-      if (auto new_prio = relax_push(u, wn)) {
-        if (!is_leaf(wn.v))
-          my_frontier.push(wn.v, new_prio.value() / delta);
-      }
-    }
-  };
+      };
   scheduler.run(init_sssp, is_stale, inspect_node, process_node);
 
 #ifdef COUNT_RELAX
@@ -137,7 +145,7 @@ parallel::atomics_array<WeightT> DeltaStep(const WGraph& g, NodeID source, Weigh
     return BestDeltaStepping<WGraph, false, true>(g, source, delta);
 }
 
-void PrintSSSPStats(const WGraph& g, const parallel::atomics_array<WeightT>& dist) {
+void PrintSSSPStats([[maybe_unused]] const WGraph& g, const parallel::atomics_array<WeightT>& dist) {
   WeightT max_dist = 0;
   int64_t num_reached = 0;
 
@@ -202,10 +210,10 @@ int main(int argc, char* argv[]) {
   cli.parse();
 
   WeightedBuilder b(cli);
-  WGraph g = b.MakeGraph();
-  g.PrintStats();
+  WGraph graph = b.MakeGraph();
+  graph.PrintStats();
 
-  SourcePicker sp(g, cli.sources_filename(), cli.start_vertex());
+  SourcePicker sp(graph, cli.sources_filename(), cli.start_vertex());
 
   for (auto i = 0; i < cli.num_sources(); i++) {
     auto source = sp.PickNext();
@@ -219,7 +227,7 @@ int main(int argc, char* argv[]) {
       return SSSPVerifier(g, source, dist);
     };
 
-    BenchmarkKernel(cli, g, SSSPBound, PrintSSSPStats, VerifierBound);
+    BenchmarkKernel(cli, graph, SSSPBound, PrintSSSPStats, VerifierBound);
   }
 
   return 0;

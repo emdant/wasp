@@ -99,7 +99,7 @@ public:
           if (!stolen_chunks.empty()) {
             my_frontier.set_current(min);
 
-            for (auto i = 0; i < stolen_chunks.size(); i++) {
+            for (std::size_t i = 0; i < stolen_chunks.size(); i++) {
               auto& chunk = stolen_chunks[i];
               if (chunk->begin == 0 && chunk->end == 0) {
                 while (!chunk->empty()) {

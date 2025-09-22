@@ -15,7 +15,7 @@ const WeightT kDistInf = numeric_limits<WeightT>::max() / 2;
 const size_t kMaxBin = numeric_limits<size_t>::max() / 2;
 const size_t kBinSizeThreshold = 1000;
 
-void PrintSSSPStats(const WGraph& g, const vector<WeightT>& dist) {
+void PrintSSSPStats([[maybe_unused]] const WGraph& g, const vector<WeightT>& dist) {
   WeightT max_dist = 0;
   int64_t num_reached = 0;
 
@@ -66,21 +66,21 @@ int main(int argc, char* argv[]) {
   cli.parse();
 
   WeightedBuilder b(cli);
-  WGraph g = b.MakeGraph();
-  g.PrintStats();
+  WGraph graph = b.MakeGraph();
+  graph.PrintStats();
 
-  SourcePicker sp(g, cli.sources_filename(), cli.start_vertex());
+  SourcePicker sp(graph, cli.sources_filename(), cli.start_vertex());
   std::vector<NodeID> sources;
 
   for (auto i = 0; i < cli.num_sources(); i++) {
     auto source = sp.PickNext();
     std::cout << "Source: " << source << std::endl;
 
-    auto SSSPBound = [&sp, &cli, source](const WGraph& g) {
+    auto SSSPBound = [source](const WGraph& g) {
       return Dijkstra(g, source);
     };
 
-    BenchmarkKernel(cli, g, SSSPBound, PrintSSSPStats, VerifyUnimplemented);
+    BenchmarkKernel(cli, graph, SSSPBound, PrintSSSPStats, VerifyUnimplemented);
   }
 
   return 0;

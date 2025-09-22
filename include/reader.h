@@ -69,7 +69,6 @@ public:
     }
 
     Edge e;
-    bool has_weights = false;
     std::string line;
     std::istringstream edge_stream;
 

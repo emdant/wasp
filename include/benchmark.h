@@ -90,11 +90,11 @@ public:
   }
 
 private:
+  const GraphT_& g_;
   NodeID given_source_;
   std::vector<NodeID> file_sources_;
   std::mt19937_64 rng_;
   UniDist<NodeID, std::mt19937_64> udist_;
-  const GraphT_& g_;
 };
 
 // Returns k pairs with the largest values from list of key-value pairs
