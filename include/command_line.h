@@ -308,4 +308,19 @@ public:
   std::string out_directory() const { return out_directory_; }
 };
 
+class CLEdge : public CLBase {
+protected:
+  std::int32_t src, dst;
+
+public:
+  explicit CLEdge(int argc, char* argv[], std::string name) : CLBase(argc, argv, name) {
+    app_.add_option("src", src, "Edge source")->check(CLI::Number)->required();
+    app_.add_option("dst", dst, "Edge destination")->check(CLI::Number)->required();
+    app_.validate_positionals();
+  }
+
+  int32_t source() const { return src; }
+  int32_t destination() const { return dst; }
+};
+
 #endif // COMMAND_LINE_H_
