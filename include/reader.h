@@ -79,6 +79,14 @@ public:
       edge_stream.clear();   // recover from fail states
       edge_stream.str(line); // change underlying string
       edge_stream >> e;
+
+      if (edge_stream.fail()) {
+        // Decide on an error strategy: throw, print a warning, or skip.
+        // For now, we'll just skip the malformed line.
+        std::cerr << "Warning: Skipping malformed line: '" << line << "'\n";
+        continue;
+      }
+
       if (one_indexed) {
         e.u--;
         static_cast<NodeID_&>(e.v)--;

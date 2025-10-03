@@ -41,6 +41,7 @@ public:
   void WriteMM(std::fstream& out) {
     constexpr size_t THRESHOLD = size_t(1) << 32; // 4 GiB
     std::stringstream buffer;
+    buffer << std::setprecision(std::numeric_limits<float>::max_digits10);
 
     // MM header
     buffer << "%%MatrixMarket matrix coordinate ";

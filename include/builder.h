@@ -5,8 +5,11 @@
 #define BUILDER_H_
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdlib>
 #include <functional>
+#include <iostream>
+#include <iterator>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -123,21 +126,23 @@ public:
   }
 
 private:
-  void RelabelEL(EdgeList& el) {
+  template <typename RelNodeID_, typename RelDestID_>
+  void RelabelEL(parallel::vector<EdgePair<RelNodeID_, RelDestID_>>& el) {
+    using RelEdge = EdgePair<RelNodeID_, RelDestID_>;
     Timer t;
     t.Start();
     if (el.size() < (1 << 20)) {
       // Sequential
-      std::unordered_map<NodeID_, NodeID_> mapping;
-      NodeID_ i = 0;
-      for (Edge& e : el) {
+      std::unordered_map<RelNodeID_, RelNodeID_> mapping;
+      RelNodeID_ i = 0;
+      for (RelEdge& e : el) {
         if (auto it = mapping.find(e.u); it != mapping.end()) {
           e.u = it->second;
         } else {
           e.u = mapping[e.u] = i++;
         }
 
-        NodeID_& v = static_cast<NodeID_&>(e.v); // if typeof(e.v) == NodeWeight, then static_cast<NodeID_&>(e) == Node&
+        RelNodeID_& v = static_cast<RelNodeID_&>(e.v); // if typeof(e.v) == NodeWeight, then static_cast<NodeID_&>(e) == Node&
         if (auto it = mapping.find(v); it != mapping.end()) {
           v = it->second;
         } else {
@@ -145,16 +150,16 @@ private:
         }
       }
     } else {
-      std::vector<std::unordered_set<NodeID_>> thread_local_sets(omp_get_max_threads());
+      std::vector<std::unordered_set<RelNodeID_>> thread_local_sets(omp_get_max_threads());
 
 #pragma omp parallel
       {
-        std::unordered_set<NodeID_> local_nodes;
+        std::unordered_set<RelNodeID_> local_nodes;
 // Each thread processes a chunk of the edge list to find unique node ids
 #pragma omp for nowait
         for (auto& e : el) {
           local_nodes.insert(e.u);
-          const NodeID_& v = static_cast<NodeID_&>(e.v);
+          const RelNodeID_& v = static_cast<RelNodeID_&>(e.v);
           local_nodes.insert(v);
         }
 
@@ -162,22 +167,22 @@ private:
       }
 
       // Unique node ids are consolidated into a single set and new ids are calculated
-      std::unordered_map<NodeID_, NodeID_> mapping;
+      std::unordered_map<RelNodeID_, RelNodeID_> mapping;
 
-      std::unordered_set<NodeID_> all_unique_nodes;
+      std::unordered_set<RelNodeID_> all_unique_nodes;
       for (const auto& s : thread_local_sets) {
         all_unique_nodes.insert(s.begin(), s.end());
       }
-      NodeID_ i = 0;
-      for (const NodeID_& old_id : all_unique_nodes) {
+      RelNodeID_ i = 0;
+      for (const RelNodeID_& old_id : all_unique_nodes) {
         mapping[old_id] = i++;
       }
 
       // Each thread updates the ids of a chunk of vertices
 #pragma omp parallel for
-      for (Edge& e : el) {
+      for (RelEdge& e : el) {
         e.u = mapping.at(e.u);
-        NodeID_& v = static_cast<NodeID_&>(e.v);
+        RelNodeID_& v = static_cast<RelNodeID_&>(e.v);
         v = mapping.at(v);
       }
     }
@@ -264,15 +269,20 @@ private:
   */
   void MakeCSRInPlace(EdgeList& el, DestID_*** index, DestID_** neighs, DestID_*** inv_index, DestID_** inv_neighs) {
     // Preprocessing of the EdgeList - sort & squish in place
+    std::cout << "Edgelist size: " << el.size() << std::endl;
 
     // Removing parallel edges
     std::sort(el.begin(), el.end());
+    auto old_end = el.end();
     auto new_end = std::unique(el.begin(), el.end());
+    std::cout << "Redundant edges: " << std::distance(new_end, old_end) << std::endl;
     el.resize(new_end - el.begin());
 
     // Removing self-loops
     auto self_loop = [](Edge e) { return e.u == e.v; };
+    old_end = el.end();
     new_end = std::remove_if(el.begin(), el.end(), self_loop);
+    std::cout << "Self-loops: " << std::distance(new_end, old_end) << std::endl;
     el.resize(new_end - el.begin());
 
     // analyze EdgeList and repurpose it for outgoing edges
@@ -458,19 +468,44 @@ private:
 
     {
       EdgeList el;
-      ReaderT r(cli_.graph_filename());
-      auto result = r.ReadFile();
+      if (relabel_vertices_) {
+        using LargeNodeID = int64_t;
+        using LargeDestID = std::conditional_t<WEIGHTED_BUILDER, NodeWeight<LargeNodeID, WeightT_>, LargeNodeID>;
+        using LargeReader = Reader<LargeNodeID, LargeDestID, WeightT_, invert>;
 
-      el = std::move(result.el);
+        LargeReader r(cli_.graph_filename());
+        auto result = r.ReadFile();
 
-      // ratio: if matrix market format is used, the format can specify whether the graph is symmetric
-      if (result.needs_symmetrize)
-        symmetrize_ = true;
+        // ratio: if matrix market format is used, the format can specify whether the graph is symmetric
+        if (result.needs_symmetrize)
+          symmetrize_ = true;
 
-      // ratio: we can read from an unweighted textual graph, so if unweighted the weight will be generated later
-      needs_weights_ = result.needs_weights;
+        // ratio: we can read from an unweighted textual graph, so if unweighted the weight will be generated later
+        needs_weights_ = result.needs_weights;
+        RelabelEL<LargeNodeID, LargeDestID>(result.el);
 
-      if (relabel_vertices_) RelabelEL(el); // Relabel vertices from 0 to |V|-1
+        el.reserve(el.size());
+        for (const auto& e : result.el) {
+          if constexpr (WEIGHTED_BUILDER) {
+            el.push_back(Edge(static_cast<NodeID_>(e.u), NodeWeight(static_cast<NodeID_>(e.v.v), e.v.w)));
+          } else {
+            el.push_back(Edge(static_cast<NodeID_>(e.u), static_cast<NodeID_>(e.v)));
+          }
+        }
+
+      } else {
+        ReaderT r(cli_.graph_filename());
+        auto result = r.ReadFile();
+
+        el = std::move(result.el);
+
+        // ratio: if matrix market format is used, the format can specify whether the graph is symmetric
+        if (result.needs_symmetrize)
+          symmetrize_ = true;
+
+        // ratio: we can read from an unweighted textual graph, so if unweighted the weight will be generated later
+        needs_weights_ = result.needs_weights;
+      }
       g = MakeGraphFromEL(el);
     }
 
