@@ -414,14 +414,19 @@ private:
     Timer t;
     t.Start();
 
-    if (num_nodes_ == -1)
+    if (num_nodes_ == -1) {
+      std::cout << "Finding Max Node ID" << std::endl;
       num_nodes_ = FindMaxNodeID(el) + 1;
-
-    if constexpr (WEIGHTED_BUILDER) {
-      if (needs_weights_ || override_weights_)
-        generateWeights(el);
     }
 
+    if constexpr (WEIGHTED_BUILDER) {
+      if (needs_weights_ || override_weights_) {
+        std::cout << "Generating Weights" << std::endl;
+        generateWeights(el);
+      }
+    }
+
+    std::cout << "Making CSR in-place" << std::endl;
     MakeCSRInPlace(el, &index, &neighs, &inv_index, &inv_neighs);
 
     t.Stop();
