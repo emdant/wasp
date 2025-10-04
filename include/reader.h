@@ -4,14 +4,21 @@
 #ifndef READER_H_
 #define READER_H_
 
+#include <charconv>
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
 #include <fstream>
 #include <iosfwd>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <string_view>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <type_traits>
+#include <unistd.h>
 #include <vector>
 
 #include "graph.h"
@@ -299,6 +306,170 @@ public:
     return result;
   }
 
+  /* Reads a Matrix Market file using mmap for high performance.
+   - if the Reader is unweighted: the MTX file can be weighted, and weights will be ignored.
+   - if the Reader is weighted: the MTX file can be unweighted.
+   Converts vertex numbering from 1..N to 0..N-1
+*/
+  ReadFileResult ReadInMTX() {
+    ReadFileResult result;
+
+    // 1. Open the file and get a file descriptor
+    int fd = open(filename_.c_str(), O_RDONLY);
+    if (fd == -1) {
+      std::perror("Error opening file");
+      std::exit(-1);
+    }
+
+    // 2. Get file size to map the whole file
+    struct stat sb;
+    if (fstat(fd, &sb) == -1) {
+      std::perror("Error getting file size");
+      close(fd);
+      std::exit(-1);
+    }
+    size_t file_size = sb.st_size;
+
+    // 3. Memory-map the file
+    const char* file_ptr = static_cast<const char*>(mmap(NULL, file_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0));
+    if (file_ptr == MAP_FAILED) {
+      std::perror("Error mapping file");
+      close(fd);
+      std::exit(-1);
+    }
+    close(fd); // File descriptor no longer needed after mmap
+
+    const char* current_pos = file_ptr;
+    const char* const end_pos = file_ptr + file_size;
+
+    // --- Header Parsing ---
+    const char* newline_pos = static_cast<const char*>(memchr(current_pos, '\n', end_pos - current_pos));
+    if (!newline_pos) {
+      std::cout << "MTX file missing header line." << std::endl;
+      std::exit(-20);
+    }
+    std::string_view header_line(current_pos, newline_pos - current_pos);
+    current_pos = newline_pos + 1;
+
+    std::string start, object, format, field, symmetry;
+    std::stringstream header_stream;
+    header_stream << header_line;
+    header_stream >> start >> object >> format >> field >> symmetry;
+
+    if (start != "%%MatrixMarket") {
+      std::cout << ".mtx file did not start with %%MatrixMarket" << std::endl;
+      std::exit(-21);
+    }
+    if ((object != "matrix") || (format != "coordinate")) {
+      std::cout << "only allow matrix coordinate format for .mtx" << std::endl;
+      std::exit(-22);
+    }
+    if (field == "complex") {
+      std::cout << "do not support complex weights for .mtx" << std::endl;
+      std::exit(-23);
+    }
+
+    bool ignore_weights = false;
+    bool has_weights;
+    if (field == "pattern") {
+      has_weights = false;
+    } else if ((field == "real") || (field == "double") || (field == "integer")) {
+      has_weights = true;
+      if (!WEIGHTED_READER)
+        ignore_weights = true;
+    } else {
+      std::cout << "unrecognized field type for .mtx" << std::endl;
+      std::exit(-24);
+    }
+
+    if (symmetry == "symmetric") {
+      result.needs_symmetrize = true;
+    } else if ((symmetry == "general") || (symmetry == "skew-symmetric")) {
+      result.needs_symmetrize = false;
+    } else {
+      std::cout << "unsupported symmetry type for .mtx" << std::endl;
+      std::exit(-25);
+    }
+
+    // --- Skip Comments and Parse Dimensions ---
+    while (current_pos < end_pos && *current_pos == '%') {
+      newline_pos = static_cast<const char*>(memchr(current_pos, '\n', end_pos - current_pos));
+      current_pos = newline_pos ? (newline_pos + 1) : end_pos;
+    }
+
+    int64_t m, n, nonzeros;
+    auto parse_int = [&](int64_t& val) {
+      while (current_pos < end_pos && isspace(*current_pos))
+        current_pos++;
+      auto [p, ec] = std::from_chars(current_pos, end_pos, val);
+      current_pos = p;
+      return ec == std::errc();
+    };
+
+    if (!parse_int(m) || !parse_int(n) || !parse_int(nonzeros)) {
+      std::cout << "Failed to parse MTX dimensions" << std::endl;
+      std::exit(-26);
+    }
+    if (m != n) {
+      std::cout << m << " " << n << " " << nonzeros << std::endl;
+      std::cout << "matrix must be square for .mtx" << std::endl;
+      std::exit(-27);
+    }
+
+    // --- Parse Edges ---
+    result.el.reserve(nonzeros);
+    while (current_pos < end_pos && result.el.size() < nonzeros) {
+      while (current_pos < end_pos && isspace(*current_pos))
+        current_pos++;
+      if (current_pos == end_pos) break;
+
+      NodeID_ u;
+      auto [p_u, ec_u] = std::from_chars(current_pos, end_pos, u);
+      if (ec_u != std::errc()) continue; // Skip malformed lines
+      current_pos = p_u;
+
+      if (has_weights && !ignore_weights) {
+        NodeWeight<NodeID_, WeightT_> v;
+        // Parse destination vertex 'v.v' (integer)
+        while (current_pos < end_pos && isspace(*current_pos))
+          current_pos++;
+        auto [p_v, ec_v] = std::from_chars(current_pos, end_pos, v.v);
+        if (ec_v != std::errc()) continue;
+        current_pos = p_v;
+
+        // Parse weight 'v.w' (float/double) using strtod
+        while (current_pos < end_pos && isspace(*current_pos))
+          current_pos++;
+        char* end_of_weight;
+        v.w = strtod(current_pos, &end_of_weight);
+        if (current_pos == end_of_weight) continue; // Parsing failed, skip line
+        current_pos = end_of_weight;
+
+        v.v -= 1;
+        result.el.push_back(Edge(u - 1, v));
+      } else {
+        NodeID_ v;
+        while (current_pos < end_pos && isspace(*current_pos))
+          current_pos++;
+        auto [p_v, ec_v] = std::from_chars(current_pos, end_pos, v);
+        if (ec_v != std::errc()) continue;
+        current_pos = p_v;
+
+        result.el.push_back(Edge(u - 1, v - 1));
+      }
+
+      // Go to the end of the current line
+      newline_pos = static_cast<const char*>(memchr(current_pos, '\n', end_pos - current_pos));
+      current_pos = newline_pos ? (newline_pos + 1) : end_pos;
+    }
+
+    // 4. Unmap the file from memory
+    munmap((void*)file_ptr, file_size);
+
+    result.needs_weights = (WEIGHTED_READER && !has_weights);
+    return result;
+  }
+
   ReadFileResult ReadFile() {
     Timer t;
     t.Start();
@@ -321,7 +492,7 @@ public:
     } else if (suffix == ".graph") {
       result = ReadInMetis(file);
     } else if (suffix == ".mtx") {
-      result = ReadInMTX(file);
+      result = ReadInMTX();
     } else {
       std::cout << "Unrecognized suffix: " << suffix << std::endl;
       std::exit(-3);
