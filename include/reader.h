@@ -285,14 +285,30 @@ public:
       std::istringstream edge_stream(line);
       NodeID_ u;
       edge_stream >> u;
+
+      if (u == 0) {
+        std::cout << "Vertex with id 0 found. Aborting." << std::endl;
+        std::exit(-1);
+      }
+      
       if (has_weights && !ignore_weights) {
         NodeWeight<NodeID_, WeightT_> v;
         edge_stream >> v;
+        if (v.v == 0) {
+          std::cout << "Vertex with id 0 found. Aborting." << std::endl;
+          std::exit(-1);
+        }
+
         v.v -= 1;
         result.el.push_back(Edge(u - 1, v));
       } else {
         NodeID_ v;
         edge_stream >> v;
+        if (v == 0) {
+          std::cout << "Vertex with id 0 found. Aborting." << std::endl;
+          std::exit(-1);
+        }
+
         result.el.push_back(Edge(u - 1, v - 1));
         if (ignore_weights)
           edge_stream.ignore(200, '\n');
@@ -428,33 +444,46 @@ public:
       if (ec_u != std::errc()) continue; // Skip malformed lines
       current_pos = p_u;
 
+      if (u == 0) {
+        std::cout << "Vertex with id 0 found. Aborting." << std::endl;
+        std::exit(-1);
+      }
+      
       if (has_weights && !ignore_weights) {
         NodeWeight<NodeID_, WeightT_> v;
         // Parse destination vertex 'v.v' (integer)
         while (current_pos < end_pos && isspace(*current_pos))
-          current_pos++;
-        auto [p_v, ec_v] = std::from_chars(current_pos, end_pos, v.v);
+        current_pos++;
+      auto [p_v, ec_v] = std::from_chars(current_pos, end_pos, v.v);
         if (ec_v != std::errc()) continue;
         current_pos = p_v;
-
+        
         // Parse weight 'v.w' (float/double) using strtod
         while (current_pos < end_pos && isspace(*current_pos))
-          current_pos++;
-        char* end_of_weight;
-        v.w = strtod(current_pos, &end_of_weight);
-        if (current_pos == end_of_weight) continue; // Parsing failed, skip line
-        current_pos = end_of_weight;
-
-        v.v -= 1;
-        result.el.push_back(Edge(u - 1, v));
-      } else {
-        NodeID_ v;
-        while (current_pos < end_pos && isspace(*current_pos))
+        current_pos++;
+      char* end_of_weight;
+      v.w = strtod(current_pos, &end_of_weight);
+      if (current_pos == end_of_weight) continue; // Parsing failed, skip line
+      current_pos = end_of_weight;
+      if (v.v == 0) {
+        std::cout << "Vertex with id 0 found. Aborting." << std::endl;
+        std::exit(-1);
+      }
+      
+      v.v -= 1;
+      result.el.push_back(Edge(u - 1, v));
+    } else {
+      NodeID_ v;
+      while (current_pos < end_pos && isspace(*current_pos))
           current_pos++;
         auto [p_v, ec_v] = std::from_chars(current_pos, end_pos, v);
         if (ec_v != std::errc()) continue;
         current_pos = p_v;
-
+        if (v == 0) {
+          std::cout << "Vertex with id 0 found. Aborting." << std::endl;
+          std::exit(-1);
+        }
+        
         result.el.push_back(Edge(u - 1, v - 1));
       }
 

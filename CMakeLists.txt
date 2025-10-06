@@ -22,6 +22,10 @@ target_compile_options(wasp INTERFACE -Wall -Wextra -Wpedantic -Wno-interference
 target_compile_options(wasp INTERFACE "-march=native")
 target_link_libraries(wasp INTERFACE "numa")
 
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -O2 -g -fsanitize=address -fno-omit-frame-pointer")
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELWITHDEBINFO} -O2 -g -fsanitize=address -fno-omit-frame-pointer")
+
+
 find_package(OpenMP REQUIRED)
 target_link_libraries(wasp INTERFACE OpenMP::OpenMP_CXX)
 
