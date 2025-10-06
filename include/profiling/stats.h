@@ -4,6 +4,7 @@
 #ifndef PROFILING_H_
 #define PROFILING_H_
 
+#include <iostream>
 #include <map>
 #include <memory>
 #include <numeric>
@@ -134,6 +135,31 @@ public:
 
       StatT sum = std::accumulate(global_values.begin(), global_values.end(), static_cast<StatT>(0));
       return static_cast<double>(sum) / global_values.size();
+    }
+  }
+
+  template <typename StatT, bool ThreadStat>
+  static void print_stat(const std::string& name) {
+    if constexpr (ThreadStat) {
+      auto stat = stats::get_stat<std::size_t, true>(name);
+
+      std::cout << "thread_stat: " << name << " " << omp_get_max_threads() << std::endl;
+      for (int tid = 0; tid < omp_get_max_threads(); tid++) {
+        std::cout << "\ttid: " << tid << "  " << stat[tid].size() << std::endl;
+        for (size_t i = 0; i < stat[tid].size(); i++) {
+          std::cout << stat[tid][i] << " ";
+        }
+        std::cout << std::endl;
+      }
+
+    } else {
+      auto stat = stats::get_stat<std::size_t, false>(name);
+
+      std::cout << "global_stat: " << name << " " << stat.size();
+      for (size_t i = 0; i < stat.size(); i++) {
+        std::cout << " " << stat[i];
+      }
+      std::cout << std::endl;
     }
   }
 };
