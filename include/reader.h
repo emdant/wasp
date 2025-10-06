@@ -347,7 +347,7 @@ public:
     size_t file_size = sb.st_size;
 
     // 3. Memory-map the file
-    const char* file_ptr = static_cast<const char*>(mmap(NULL, file_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0));
+    char* file_ptr = static_cast<char*>(mmap(NULL, file_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0));
     if (file_ptr == MAP_FAILED) {
       std::perror("Error mapping file");
       close(fd);
@@ -413,8 +413,8 @@ public:
       current_pos = newline_pos ? (newline_pos + 1) : end_pos;
     }
 
-    int64_t m, n, nonzeros;
-    auto parse_int = [&](int64_t& val) {
+    uint64_t m, n, nonzeros;
+    auto parse_int = [&](uint64_t& val) {
       while (current_pos < end_pos && isspace(*current_pos))
         current_pos++;
       auto [p, ec] = std::from_chars(current_pos, end_pos, val);
@@ -493,7 +493,7 @@ public:
     }
 
     // 4. Unmap the file from memory
-    munmap((void*)file_ptr, file_size);
+    munmap(static_cast<void*>(file_ptr), file_size);
 
     result.needs_weights = (WEIGHTED_READER && !has_weights);
     return result;
