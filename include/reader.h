@@ -278,14 +278,30 @@ public:
       std::istringstream edge_stream(line);
       NodeID_ u;
       edge_stream >> u;
+
+      if (u == 0) {
+        std::cout << "Vertex with id 0 found. Aborting." << std::endl;
+        std::exit(-1);
+      }
+
       if (has_weights && !ignore_weights) {
         NodeWeight<NodeID_, WeightT_> v;
         edge_stream >> v;
+        if (v.v == 0) {
+          std::cout << "Vertex with id 0 found. Aborting." << std::endl;
+          std::exit(-1);
+        }
+
         v.v -= 1;
         result.el.push_back(Edge(u - 1, v));
       } else {
         NodeID_ v;
         edge_stream >> v;
+        if (v == 0) {
+          std::cout << "Vertex with id 0 found. Aborting." << std::endl;
+          std::exit(-1);
+        }
+
         result.el.push_back(Edge(u - 1, v - 1));
         if (ignore_weights)
           edge_stream.ignore(200, '\n');

@@ -286,8 +286,13 @@ private:
     el.resize(new_end - el.begin());
 
     // analyze EdgeList and repurpose it for outgoing edges
+    // std::cout << "Counting degrees the first time" << std::endl;
     parallel::vector<NodeID_> degrees = CountDegrees(el, false);
+
+    // std::cout << "Performing parallel prefix sum" << std::endl;
     parallel::vector<SGOffset> offsets = ParallelPrefixSum(degrees);
+
+    // std::cout << "Counting degrees the second time" << std::endl;
     parallel::vector<NodeID_> indegrees = CountDegrees(el, true);
 
     // Reusing EdgeList data
@@ -295,6 +300,7 @@ private:
     // Iterate over the edge list, while at the same time modifying the underlying buffer
     // Only the destination vertex data is copied, and offsets are incremented in order to
     // push the next destination vertex into the next available slot
+    // std::cout << "Copying out_edges and incrementing offsets" << std::endl;
     for (Edge e : el)
       (*neighs)[offsets[e.u]++] = e.v;
 
@@ -303,16 +309,20 @@ private:
 
     // Now the offsets array needs to be shifted down as they have been incremented,
     // this is simple, as offsets[i] is now offsets[i+1]
+    // std::cout << "Shifting down offsets" << std::endl;
     for (NodeID_ n = num_nodes_; n >= 0; n--)
       offsets[n] = n != 0 ? offsets[n - 1] : 0;
 
     if (!symmetrize_) { // not going to symmetrize so no need to add edges
       size_t new_size = num_edges * sizeof(DestID_);
+      // std::cout << "Reallocating" << std::endl;
       *neighs = static_cast<DestID_*>(std::realloc(*neighs, new_size));
       *index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, *neighs);
 
       if (invert) { // create inv_neighs & inv_index for incoming edges
+        // std::cout << "Parallel prefix sum for in-offsets" << std::endl;
         parallel::vector<SGOffset> inoffsets = ParallelPrefixSum(indegrees);
+        // std::cout << "Allocating space for offsets" << std::endl;
         *inv_neighs = new DestID_[inoffsets[num_nodes_]];
         *inv_index = CSRGraph<NodeID_, DestID_>::GenIndex(inoffsets, *inv_neighs);
         for (NodeID_ u = 0; u < num_nodes_; u++) {
@@ -330,6 +340,7 @@ private:
       }
     } else { // symmetrize graph by adding missing inverse edges
       // Step 1 - count number of needed inverses
+      // std::cout << "Allocating and counting invs_needed" << std::endl;
       parallel::vector<NodeID_> invs_needed(num_nodes_, 0);
       for (NodeID_ u = 0; u < num_nodes_; u++) {
         for (SGOffset i = offsets[u]; i < offsets[u + 1]; i++) {
@@ -352,12 +363,14 @@ private:
 
       // increase offsets to account for missing inverses, realloc neighs
       SGOffset total_missing_inv = 0;
+      // std::cout << "Increasing offsets for missing inverses" << std::endl;
       for (NodeID_ n = 0; n < num_nodes_; n++) {
         offsets[n] += total_missing_inv;
         total_missing_inv += invs_needed[n];
       }
       offsets[num_nodes_] += total_missing_inv;
 
+      // std::cout << "Reallocating neighs array for missing inverses" << std::endl;
       size_t newsize = (offsets[num_nodes_] * sizeof(DestID_));
       *neighs = static_cast<DestID_*>(std::realloc(*neighs, newsize));
       if (*neighs == nullptr) {
@@ -367,6 +380,7 @@ private:
 
       // Step 2 - spread out existing neighs to make room for inverses
       //   copies backwards (overwrites) and inserts free space at starts
+      // std::cout << "Spreading existign neighs" << std::endl;
       SGOffset tail_index = offsets[num_nodes_] - 1;
       for (NodeID_ n = num_nodes_ - 1; n >= 0; n--) {
         SGOffset new_start = offsets[n] + invs_needed[n];
@@ -379,6 +393,7 @@ private:
       }
 
       // Step 3 - add missing inverse edges into free spaces from Step 2
+      // std::cout << "Adding missing edges" << std::endl;
       for (NodeID_ u = 0; u < num_nodes_; u++) {
         for (SGOffset i = offsets[u] + invs_needed[u]; i < offsets[u + 1]; i++) {
           DestID_ dest_v = (*neighs)[i];
@@ -399,6 +414,8 @@ private:
           }
         }
       }
+
+      // std::cout << "Sorting edge lists" << std::endl;
       for (NodeID_ n = 0; n < num_nodes_; n++)
         std::sort(*neighs + offsets[n], *neighs + offsets[n + 1]);
       *index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, *neighs);
