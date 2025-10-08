@@ -17,6 +17,10 @@
 #include "frontier.h"
 #include "numa/numa_distance_map.h"
 
+#ifdef PROFILE_STATS
+#include "profiling/stats.h"
+#endif
+
 namespace bucketing {
 
 class executor {
@@ -97,6 +101,9 @@ public:
           }
 
           if (!stolen_chunks.empty()) {
+#ifdef PROFILE_STATS
+            stats::push_stat("steal_size", stolen_chunks.size());
+#endif
             my_frontier.set_current(min);
 
             for (std::size_t i = 0; i < stolen_chunks.size(); i++) {
@@ -124,7 +131,10 @@ public:
         my_frontier.set_current(next_bucket);
 
         if (next_bucket != EMPTY_BUCKETS) {
-          my_frontier.push_from(next_bucket);
+          [[maybe_unused]] auto num_chunks = my_frontier.push_from(next_bucket);
+#ifdef PROFILE_STATS
+          stats::push_stat("next_size", num_chunks);
+#endif
         } else {
           bool all_finished = true;
           for (auto i = 0; i < num_threads_; i++) {

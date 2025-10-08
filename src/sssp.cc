@@ -3,6 +3,7 @@
 // See LICENSE.txt for license details
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -19,6 +20,10 @@
 
 #ifdef PAPI_PROFILE
 #include "profiling/papi_helper.h"
+#endif
+
+#ifdef PROFILE_STATS
+#include "profiling/stats.h"
 #endif
 
 #include "benchmark.h"
@@ -197,9 +202,21 @@ bool SSSPVerifier(const WGraph& g, NodeID source, const parallel::atomics_array<
   return all_ok;
 }
 
+#ifdef PROFILE_STATS
+void print_profiling() {
+  stats::print_stat<std::size_t, true>("steal_size");
+  stats::print_stat<std::size_t, true>("next_size");
+}
+#endif
+
 int main(int argc, char* argv[]) {
 #ifdef PAPI_PROFILE
   papi_helper::initialize();
+#endif
+
+#ifdef PROFILE_STATS
+  stats::register_stat<size_t>("steal_size", true);
+  stats::register_stat<size_t>("next_size", true);
 #endif
 
   numa_distance_map::initialize();
@@ -228,6 +245,10 @@ int main(int argc, char* argv[]) {
     };
 
     BenchmarkKernel(cli, graph, SSSPBound, PrintSSSPStats, VerifierBound);
+#ifdef PROFILE_STATS
+    if (i == 0)
+      print_profiling();
+#endif
   }
 
   return 0;

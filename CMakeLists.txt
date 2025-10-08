@@ -42,6 +42,8 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   target_compile_options(wasp INTERFACE "--gcc-install-dir=${gcc_install_dir}")
 endif()
 
+option(PROFILE_STATS "Enable the profiling of statistics at runtime" OFF)
+
 option(LINK_PAPI "Link the PAPI library and compile the programs using PAPI" OFF)
 if (LINK_PAPI)
   if(DEFINED ENV{PAPI_DIR})
@@ -71,6 +73,11 @@ function(create_typed_target TARGET_NAME SOURCE_FILE)
     target_compile_definitions(${TYPED_TARGET} PRIVATE USE_${UPPER_TYPE})
     target_link_libraries(${TYPED_TARGET} PRIVATE wasp)
     add_dependencies(${TARGET_NAME} ${TYPED_TARGET})
+    
+    if (PROFILE_STATS)
+      target_compile_definitions(${TYPED_TARGET} PRIVATE PROFILE_STATS)
+    endif()
+
   endforeach()
 endfunction()
 
