@@ -5,6 +5,8 @@
 #define BUCKETING_FRONTIER_H_
 
 #include <atomic>
+#include <cstddef>
+#include <iterator>
 
 #include "base.h"
 #include "current_bucket.h"
@@ -52,11 +54,15 @@ public:
     return current_bucket_.empty();
   }
 
-  void push_from(priority_level p) {
+  std::size_t push_from(priority_level p) {
     auto& bucket = next_buckets_.get(p);
 
-    while (!bucket.empty())
+    std::size_t pushed = 0;
+    while (!bucket.empty()) {
+      pushed++;
       current_bucket_.push(bucket.pop_chunk());
+    }
+    return pushed;
   }
 
   inline void set_current(priority_level p) {
