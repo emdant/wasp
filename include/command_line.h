@@ -4,13 +4,14 @@
 #ifndef COMMAND_LINE_H_
 #define COMMAND_LINE_H_
 
-#include <algorithm>
 #include <cstdint>
+#include <iostream>
+#include <numeric>
 #include <string>
+#include <vector>
 
 #include <CLI11.hpp>
 #include <utility>
-#include <vector>
 
 enum class GraphGenerator : int {
   NO_GEN,
@@ -71,13 +72,11 @@ private:
 
       // Check if the option was passed on the command line
       if (opt->count() > 0) {
-        if (opt->get_type_size() == 0) { // Check for a flag
-          std::cout << "true [CLI]";
-        } else {
-          std::cout << join_strings(opt->results(), ", ") << " [CLI]";
-        }
+        if (opt->get_expected_min() == 0) std::cout << "true [CLI]";
+        else std::cout << join_strings(opt->results(), ", ") << " [CLI]";
       } else if (!opt->get_default_str().empty()) {
-        std::cout << opt->get_default_str() << " [default]"; // If not passed, print its default value
+        if (opt->get_expected_min() == 0) std::cout << (opt->get_default_str() == "0" ? "false" : "true") << " [default]";
+        else std::cout << opt->get_default_str() << " [default]"; // If not passed, print its default value
       } else {
         std::cout << "[not set]"; // For options without a default that were not passed
       }
@@ -88,24 +87,51 @@ private:
   void print_config(CLI::App& app) {
     std::cout << "------ Configuration ------" << std::endl;
 
-    auto group = app.get_option_group("graph");
-    auto filename_opt = group->get_option("--graph-filename");
+    // Determine which modes are active based on user input.
+    const bool is_file_mode = app.get_option("--graph-filename")->count() > 0;
+    const bool is_synthetic_mode = app.get_option("--synthetic-gen")->count() > 0;
+    const bool is_weight_gen_mode = app.get_option("--weight-gen")->count() > 0;
+    // Use get_option_no_throw for options from derived classes that may not exist in CLBase.
+    const CLI::Option* sources_file_opt = app.get_option_no_throw("--sources");
+    const bool is_sources_file_mode = sources_file_opt && sources_file_opt->count() > 0;
 
-    auto options = app.get_options();
-    if (!filename_opt->empty()) {
-      options.erase(std::remove_if(options.begin(), options.end(), [&](auto option) {
-                      return option->get_name() == "--scale" || option->get_name() == "--degree";
-                    }),
-                    options.end());
+    std::vector<CLI::Option*> options_to_print;
+    for (CLI::Option* opt : app.get_options()) {
+      // Basic filtering for help flags.
+      if (!opt || opt->get_name() == "--help" || opt->get_name() == "?") {
+        continue;
+      }
 
-      print_options(std::vector{filename_opt});
-      print_options(options);
-    } else {
-      auto synthetic_opt = group->get_option("--synthetic-gen");
-      print_options(std::vector{synthetic_opt});
-      print_options(options);
+      const std::string& opt_name = opt->get_name();
+
+      // Rule 1: Exclude options based on the primary graph mode (file vs. synthetic).
+      if (is_file_mode && (opt_name == "--synthetic-gen" || opt_name == "--scale" || opt_name == "--degree"))
+        continue;
+
+      if (is_synthetic_mode && (opt_name == "--graph-filename" || opt_name == "--weights-filename" || opt_name == "--symmetrize"))
+        continue;
+
+      // Rule 2: Exclude weight options if not generating weights.
+      if (opt_name == "--weight-range" && !is_weight_gen_mode)
+        continue;
+
+      // Rule 3: Override is only meaningful for file mode combined with weight generation.
+      if (opt_name == "--override-weights" && (!is_file_mode || !is_weight_gen_mode))
+        continue;
+
+      if (opt_name == "--weight-gen" && !is_weight_gen_mode)
+        continue;
+
+      // Rule 4: Exclude conflicting traversal options if a sources file is provided.
+      if (is_sources_file_mode && opt_name == "--start-vertex")
+        continue;
+
+      // If we reach here, the option is relevant to the current mode.
+      if (opt->count() > 0 || opt->get_expected_min() == 0 || !opt->get_default_str().empty())
+        options_to_print.push_back(opt);
     }
 
+    print_options(options_to_print);
     std::cout << "---------------------" << std::endl;
   }
 
@@ -128,8 +154,7 @@ protected:
 public:
   explicit CLBase(int argc, char** argv, std::string name)
       : app_(name), argc_(argc), argv_(argv) {
-    auto graph_input_group = app_.add_option_group("graph");
-    auto gfname = graph_input_group->add_option("-f,--graph-filename", graph_filename_, "Load graph from file")
+    auto gfname = app_.add_option("-f,--graph-filename", graph_filename_, "Load graph from file")
                       ->default_val("");
 
     app_.add_option("-w,--weights-filename", weights_filename_, "Load weights from file")
@@ -138,10 +163,10 @@ public:
 
     app_.add_flag("--symmetrize", symmetrize_, "Symmetrize input edge list")
         ->default_val(false);
-    app_.add_flag("--override-weights", override_weights_, "Override existing weights with generated ones")
-        ->default_val(false);
+    auto override = app_.add_flag("--override-weights", override_weights_, "Override existing weights with generated ones")
+                        ->default_val(false);
 
-    auto synthetic_gen = graph_input_group->add_option("--synthetic-gen", gen_, "Kind of synthetic graph to generate")
+    auto synthetic_gen = app_.add_option("--synthetic-gen", gen_, "Kind of synthetic graph to generate")
                              ->transform(CLI::CheckedTransformer(graph_map_, CLI::ignore_case));
     app_.add_option("--scale", gen_scale_, "Scale of the synthetic graph (2^{scale})")
         ->needs(synthetic_gen)
@@ -160,8 +185,10 @@ public:
         ->expected(0, 2);
 
     synthetic_gen->needs(wt);
+    override->needs(wt);
 
-    graph_input_group->require_option(1);
+    gfname->excludes(synthetic_gen);
+    synthetic_gen->excludes(gfname);
   }
 
   virtual ~CLBase() = default;
@@ -214,13 +241,16 @@ protected:
 
 public:
   explicit CLTraversal(int argc, char** argv, std::string name) : CLApp(argc, argv, name) {
-    app_.add_option("-s,--sources", sources_file_, "Load sources from file")
-        ->default_val("");
-    app_.add_option("-r,--start-vertex", start_vertex_, "Start traversal from vertex")
-        ->default_val(-1) // -1 indicates not set by user
-        ->default_str("randomly generated");
+    auto sf = app_.add_option("-s,--sources", sources_file_, "Load sources from file")
+                  ->default_val("");
+    auto sv = app_.add_option("-r,--start-vertex", start_vertex_, "Start traversal from vertex")
+                  ->default_val(-1) // -1 indicates not set by user
+                  ->default_str("randomly generated");
     app_.add_option("-S,--num-sources", num_sources_, "Number of source vertices to test")
         ->default_val(1);
+
+    sf->excludes(sv);
+    sv->excludes(sf);
   }
 
   std::string sources_filename() const { return sources_file_; }
