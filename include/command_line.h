@@ -33,17 +33,15 @@ enum OutputFormat : int {
 
 class CLBase {
 private:
-  // clang-format off
   std::map<std::string, GraphGenerator> graph_map_{
-    {"kron", GraphGenerator::KRONECKER}, {"kronecker", GraphGenerator::KRONECKER},
-    {"uni", GraphGenerator::UNIFORM}, {"uniform", GraphGenerator::UNIFORM}
+      {"kronecker", GraphGenerator::KRONECKER},
+      {"uniform", GraphGenerator::KRONECKER}
   };
 
   std::map<std::string, WeightGenerator> weight_map_{
-    {"normal", WeightGenerator::NORMAL}, {"uniform", WeightGenerator::UNIFORM}
+      {"normal", WeightGenerator::NORMAL},
+      {"uniform", WeightGenerator::UNIFORM}
   };
-
-  // clang-format on
 
   void print_options(const std::vector<CLI::Option*>& options) {
     auto join_strings = [](const std::vector<std::string>& vec, const std::string& delim) {
@@ -112,7 +110,7 @@ private:
         continue;
 
       // Rule 2: Exclude weight options if not generating weights.
-      if (opt_name == "--weight-range" && !is_weight_gen_mode)
+      if (opt_name == "--dist-params" && !is_weight_gen_mode)
         continue;
 
       if (opt_name == "--weight-gen" && !is_weight_gen_mode)
@@ -145,7 +143,7 @@ protected:
   int gen_degree_{16};
 
   WeightGenerator weight_dist_{WeightGenerator::NO_GEN};
-  std::pair<double, double> weight_range_;
+  std::pair<double, double> distribution_params_;
 
 public:
   explicit CLBase(int argc, char** argv, std::string name)
@@ -166,7 +164,7 @@ public:
         ->needs(synthetic_gen)
         ->default_val(16);
 
-    app_.add_option("--degree", gen_degree_, "Average degree of the  synthetic graph")
+    app_.add_option("--degree", gen_degree_, "Average degree of the synthetic graph")
         ->needs(synthetic_gen)
         ->default_val(16);
 
@@ -174,7 +172,7 @@ public:
                   ->default_val(WeightGenerator::NO_GEN)
                   ->transform(CLI::CheckedTransformer(weight_map_, CLI::ignore_case));
 
-    app_.add_option("--weight-range", weight_range_, "Range [a, b) of the uniform distribution")
+    app_.add_option("--dist-params", distribution_params_, "Distribution parameters: a,b for uniform; mean,stddev for normal")
         ->needs(wt)
         ->expected(0, 2);
 
@@ -204,7 +202,7 @@ public:
   bool using_generator() const { return gen_ != GraphGenerator::NO_GEN; }
 
   WeightGenerator weight_distribution() const { return weight_dist_; }
-  std::pair<double, double> weight_range() const { return weight_range_; }
+  std::pair<double, double> distribution_params() const { return distribution_params_; }
 };
 
 class CLApp : public CLBase {

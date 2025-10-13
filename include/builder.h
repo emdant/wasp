@@ -5,11 +5,13 @@
 #define BUILDER_H_
 
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <iterator>
+#include <random>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -59,7 +61,7 @@ class BuilderBase {
 
   bool generate_weights_ = false;
   WeightGenerator weight_dist_ = WeightGenerator::NO_GEN;
-  std::pair<WeightT_, WeightT_> weight_range_;
+  std::pair<WeightT_, WeightT_> dist_params_;
 
 public:
   explicit BuilderBase(const CLBase& cli) {
@@ -75,7 +77,7 @@ public:
 
     if constexpr (WEIGHTED_BUILDER) {
       weight_dist_ = cli.weight_distribution();
-      weight_range_ = cli.weight_range();
+      dist_params_ = cli.distribution_params();
       generate_weights_ = weight_dist_ != WeightGenerator::NO_GEN;
       needs_weights_ = WEIGHTED_BUILDER;
     }
@@ -469,22 +471,41 @@ private:
     else return CSRGraph<NodeID_, DestID_, invert>(num_nodes_, index, neighs, inv_index, inv_neighs);
   }
 
-  void generateWeights(EdgeList& el) {
-    if (weight_dist_ == WeightGenerator::UNIFORM) {
-      std::cout << "Generating uniformly distributed weight within range ["
-                << weight_range_.first << ", " << weight_range_.second << ")" << std::endl;
-      Generator<NodeID_, DestID_, WeightT_>::InsertUniformWeights(el, weight_range_.first, weight_range_.second);
-    } else if (weight_dist_ == WeightGenerator::NORMAL) {
-      if constexpr (std::is_floating_point_v<WeightT_>) {
-        std::cout << "Generating normally distributed weights with mu=1, stddev=sqrt(V/E)" << std::endl;
-        Generator<NodeID_, DestID_, WeightT_>::InsertNormalWeights(el, num_nodes_, el.size());
-      } else {
+  template <typename ReprT>
+  void generateWeights(ReprT& edge_repr) {
+    switch (weight_dist_) {
+
+    case WeightGenerator::UNIFORM: {
+      using udist = std::conditional_t<std::is_floating_point_v<WeightT_>, std::uniform_real_distribution<WeightT_>, std::uniform_int_distribution<WeightT_>>;
+      std::cout << "Generating uniformly distributed weight within range ";
+      std::cout << "[" << dist_params_.first << ", " << dist_params_.second << ")" << std::endl;
+      udist dist(
+          static_cast<WeightT_>(dist_params_.first),
+          static_cast<WeightT_>(dist_params_.second)
+      );
+      graph_utils::replace_weights(edge_repr, dist, true);
+      break;
+    }
+
+    case WeightGenerator::NORMAL: {
+      if constexpr (!std::is_floating_point_v<WeightT_>) {
         std::cout << "Normal distribution not supported for integer weights" << std::endl;
-        exit(-1);
+        std::exit(-1);
+      } else {
+        std::cout << "Generating normally distributed weights with";
+        std::cout << "mean=" << dist_params_.first << ", stddev=" << dist_params_.second << std::endl;
+        std::normal_distribution<WeightT_> ndist(
+            static_cast<WeightT_>(dist_params_.first),
+            static_cast<WeightT_>(dist_params_.second)
+        );
+        graph_utils::replace_weights(edge_repr, ndist, true);
+        break;
       }
-    } else {
+    }
+
+    default:
       std::cout << "Weight generator not suppported" << std::endl;
-      exit(-1);
+      std::exit(-1);
     }
   }
 
@@ -492,14 +513,15 @@ private:
     ReaderT r(graph_filename_);
     auto g = r.ReadSerializedGraph();
 
-    if constexpr (WEIGHTED_BUILDER)
+    if constexpr (WEIGHTED_BUILDER) {
       if (weights_filename_ != "") {
         VectorReader<typename DestID_::WeightT> wreader(weights_filename_);
         g.ReplaceWeights(wreader.ReadSerialized());
       }
 
-    if (generate_weights_) {
-      // TODO
+      if (generate_weights_) {
+        generateWeights(g);
+      }
     }
 
     return g;
