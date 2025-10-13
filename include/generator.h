@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <random>
@@ -45,37 +46,43 @@ public:
 
 template <typename T>
 using RNG_t = typename RNG<T>::type;
+constexpr std::size_t block_size = 1 << 19;
+
+template <typename RngT, typename DistT>
+auto generate(RngT& rng, DistT& dist, bool positive) {
+  if (!positive) return dist(rng);
+  else {
+    auto ret = dist(rng);
+    while (ret < 0)
+      ret = dist(rng);
+    return ret;
+  }
+};
 
 } // namespace detail
 
 template <typename NodeID_, typename WeightT_, typename DistT>
-void randomize_weights(CSRGraph<NodeID_, NodeWeight<NodeID_, WeightT_>>& g, DistT& dist, bool positive) {
+void replace_weights(CSRGraph<NodeID_, NodeWeight<NodeID_, WeightT_>>& g, DistT& dist, bool positive) {
   using WNode = NodeWeight<NodeID_, WeightT_>;
   using RNG = detail::RNG_t<NodeID_>;
 
-  constexpr std::size_t block_size = 1 << 19;
-
-  auto generate = [&](RNG rng) -> WeightT_ {
-    if (!positive) return dist(rng);
-    else {
-      WeightT_ ret;
-      while ((ret = dist(rng)) < 0)
-        ;
-      return ret;
-    }
-  };
-
+  // When comparing edges we only want to compare the vertex in this case
   auto compare_node = [](const WNode& a, const WNode& b) { return a.v < b.v; };
+  std::size_t n = static_cast<std::size_t>(g.num_nodes());
 
 #pragma omp parallel for
-  for (size_t block = 0; block < g.num_nodes(); block += block_size) {
+  for (std::size_t block = 0; block < n; block += detail::block_size) {
+
     // RNG is seeded with graph stats and current block
-    RNG thread_rng(g.num_nodes() + g.num_edges_directed() + (block / block_size));
-    for (size_t u = block; u < std::min(block + block_size, g.num_nodes()); u++) {
+    RNG rng(g.num_nodes() + g.num_edges_directed() + (block / detail::block_size));
+
+    for (std::size_t u = block; u < std::min(block + detail::block_size, n); u++) {
       for (WNode& wn : g.out_neigh(u)) {
-        if (g.directed() || u < wn.v) { // for undirected graphs: only consider edges where u < v
-          WeightT_ w = generate(thread_rng);
+        if (g.directed() || static_cast<NodeID_>(u) < wn.v) { // for undirected graphs: only consider edges where u < v
+          WeightT_ w = detail::generate(rng, dist, positive);
           wn.w = w;
+
+          // Look for the in-edge and update the weight
           auto in_neigh = g.in_neigh(wn.v); // for undirected graphs: out_neigh == in_neigh
           auto it = std::lower_bound(in_neigh.begin(), in_neigh.end(), static_cast<WNode>(u), compare_node);
           if (it == in_neigh.end()) {
@@ -87,6 +94,18 @@ void randomize_weights(CSRGraph<NodeID_, NodeWeight<NodeID_, WeightT_>>& g, Dist
         }
       }
     }
+  }
+}
+
+template <typename NodeID_, typename WeightT_, typename DistT>
+void replace_weights(parallel::vector<EdgePair<NodeID_, NodeWeight<NodeID_, WeightT_>>>& el, DistT& dist, bool positive) {
+  using RNG = detail::RNG_t<NodeID_>;
+
+#pragma omp parallel for
+  for (std::size_t block = 0; block < el.size(); block += detail::block_size) {
+    RNG rng(kRandSeed + block / detail::block_size);
+    for (std::size_t e = block; e < std::min(block + detail::block_size, el.size()); e++)
+      el[e].v.w = detail::generate(rng, dist, positive);
   }
 }
 
