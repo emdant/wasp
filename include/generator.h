@@ -31,6 +31,67 @@ Given scale and degree, generates edgelist for synthetic graph
  - Blocking/reseeding is for parallelism with deterministic output edgelist
 */
 
+namespace graph_utils {
+
+namespace detail {
+
+template <typename ValueT>
+class RNG {
+  using uValueT = std::make_unsigned_t<ValueT>;
+
+public:
+  using type = std::conditional_t<std::numeric_limits<uValueT>::digits == 32, std::mt19937, std::mt19937_64>;
+};
+
+template <typename T>
+using RNG_t = typename RNG<T>::type;
+
+} // namespace detail
+
+template <typename NodeID_, typename WeightT_, typename DistT>
+void randomize_weights(CSRGraph<NodeID_, NodeWeight<NodeID_, WeightT_>>& g, DistT& dist, bool positive) {
+  using WNode = NodeWeight<NodeID_, WeightT_>;
+  using RNG = detail::RNG_t<NodeID_>;
+
+  constexpr std::size_t block_size = 1 << 19;
+
+  auto generate = [&](RNG rng) -> WeightT_ {
+    if (!positive) return dist(rng);
+    else {
+      WeightT_ ret;
+      while ((ret = dist(rng)) < 0)
+        ;
+      return ret;
+    }
+  };
+
+  auto compare_node = [](const WNode& a, const WNode& b) { return a.v < b.v; };
+
+#pragma omp parallel for
+  for (size_t block = 0; block < g.num_nodes(); block += block_size) {
+    // RNG is seeded with graph stats and current block
+    RNG thread_rng(g.num_nodes() + g.num_edges_directed() + (block / block_size));
+    for (size_t u = block; u < std::min(block + block_size, g.num_nodes()); u++) {
+      for (WNode& wn : g.out_neigh(u)) {
+        if (g.directed() || u < wn.v) { // for undirected graphs: only consider edges where u < v
+          WeightT_ w = generate(thread_rng);
+          wn.w = w;
+          auto in_neigh = g.in_neigh(wn.v); // for undirected graphs: out_neigh == in_neigh
+          auto it = std::lower_bound(in_neigh.begin(), in_neigh.end(), static_cast<WNode>(u), compare_node);
+          if (it == in_neigh.end()) {
+            auto repr = g.directed() ? "Inverse (CSC) for directed" : "CSR for undirected";
+            std::cout << repr << " graph is malformed. Aborting." << std::endl;
+            std::exit(-1);
+          }
+          (*it).w = w;
+        }
+      }
+    }
+  }
+}
+
+} // namespace graph_utils
+
 // maps to range [0,max_value], tailored to std::mt19937
 template <typename NodeID_, typename rng_t_, typename uNodeID_ = typename std::make_unsigned<NodeID_>::type>
 class UniDist {
