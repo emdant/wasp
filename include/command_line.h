@@ -115,10 +115,6 @@ private:
       if (opt_name == "--weight-range" && !is_weight_gen_mode)
         continue;
 
-      // Rule 3: Override is only meaningful for file mode combined with weight generation.
-      if (opt_name == "--override-weights" && (!is_file_mode || !is_weight_gen_mode))
-        continue;
-
       if (opt_name == "--weight-gen" && !is_weight_gen_mode)
         continue;
 
@@ -147,7 +143,7 @@ protected:
   GraphGenerator gen_{GraphGenerator::NO_GEN};
   int gen_scale_{16};
   int gen_degree_{16};
-  bool override_weights_{false};
+
   WeightGenerator weight_dist_{WeightGenerator::NO_GEN};
   std::pair<double, double> weight_range_;
 
@@ -163,8 +159,6 @@ public:
 
     app_.add_flag("--symmetrize", symmetrize_, "Symmetrize input edge list")
         ->default_val(false);
-    auto override = app_.add_flag("--override-weights", override_weights_, "Override existing weights with generated ones")
-                        ->default_val(false);
 
     auto synthetic_gen = app_.add_option("--synthetic-gen", gen_, "Kind of synthetic graph to generate")
                              ->transform(CLI::CheckedTransformer(graph_map_, CLI::ignore_case));
@@ -185,7 +179,6 @@ public:
         ->expected(0, 2);
 
     synthetic_gen->needs(wt);
-    override->needs(wt);
 
     gfname->excludes(synthetic_gen);
     synthetic_gen->excludes(gfname);
@@ -210,7 +203,6 @@ public:
   int synthetic_degree() const { return gen_degree_; }
   bool using_generator() const { return gen_ != GraphGenerator::NO_GEN; }
 
-  bool override_weights() const { return override_weights_; }
   WeightGenerator weight_distribution() const { return weight_dist_; }
   std::pair<double, double> weight_range() const { return weight_range_; }
 };

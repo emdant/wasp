@@ -44,24 +44,40 @@ class BuilderBase {
   typedef parallel::vector<Edge> EdgeList;
   typedef Reader<NodeID_, DestID_, WeightT_, invert> ReaderT;
 
-  const CLBase& cli_;
   bool symmetrize_;
+  bool needs_weights_ = false;
+  bool relabel_vertices_ = false;
   int64_t num_nodes_ = -1;
 
-  bool relabel_vertices_ = false;
-  bool override_weights_ = false;
-  bool needs_weights_ = false;
+  std::string graph_filename_ = "";
+  std::string weights_filename_ = "";
+
+  bool generate_graph = false;
+  GraphGenerator graph_gen_ = GraphGenerator::NO_GEN;
+  int synthetic_scale_;
+  int synthetic_degree_;
+
+  bool generate_weights_ = false;
   WeightGenerator weight_dist_ = WeightGenerator::NO_GEN;
   std::pair<WeightT_, WeightT_> weight_range_;
 
 public:
-  explicit BuilderBase(const CLBase& cli) : cli_(cli) {
-    symmetrize_ = cli_.symmetrize();
+  explicit BuilderBase(const CLBase& cli) {
+    symmetrize_ = cli.symmetrize();
+    graph_filename_ = cli.graph_filename();
+    if (graph_filename_ == "") generate_graph = true;
+
+    if (generate_graph) {
+      graph_gen_ = cli.graph_generator();
+      synthetic_scale_ = cli.synthetic_scale();
+      synthetic_degree_ = cli.synthetic_degree();
+    }
+
     if constexpr (WEIGHTED_BUILDER) {
-      override_weights_ = cli_.override_weights();
-      needs_weights_ = WEIGHTED_BUILDER;
       weight_dist_ = cli.weight_distribution();
       weight_range_ = cli.weight_range();
+      generate_weights_ = weight_dist_ != WeightGenerator::NO_GEN;
+      needs_weights_ = WEIGHTED_BUILDER;
     }
   }
 
@@ -78,8 +94,8 @@ public:
   }
 
   CSRGraph<NodeID_, DestID_, invert> MakeGraph() {
-    if (cli_.graph_filename() != "") {
-      auto suffix = GetSuffix(cli_.graph_filename());
+    if (graph_filename_ != "") {
+      auto suffix = GetSuffix(graph_filename_);
       if (suffix == ".sg" || suffix == ".wsg") {
         return readSerialized();
       } else {
@@ -437,7 +453,7 @@ private:
     }
 
     if constexpr (WEIGHTED_BUILDER) {
-      if (needs_weights_ || override_weights_) {
+      if (needs_weights_ || generate_weights_) {
         std::cout << "Generating Weights" << std::endl;
         generateWeights(el);
       }
@@ -473,14 +489,18 @@ private:
   }
 
   CSRGraph<NodeID_, DestID_, invert> readSerialized() {
-    ReaderT r(cli_.graph_filename());
+    ReaderT r(graph_filename_);
     auto g = r.ReadSerializedGraph();
 
     if constexpr (WEIGHTED_BUILDER)
-      if (cli_.weights_filename() != "") {
-        VectorReader<typename DestID_::WeightT> wreader(cli_.weights_filename());
+      if (weights_filename_ != "") {
+        VectorReader<typename DestID_::WeightT> wreader(weights_filename_);
         g.ReplaceWeights(wreader.ReadSerialized());
       }
+
+    if (generate_weights_) {
+      // TODO
+    }
 
     return g;
   }
@@ -495,7 +515,7 @@ private:
         using LargeDestID = std::conditional_t<WEIGHTED_BUILDER, NodeWeight<LargeNodeID, WeightT_>, LargeNodeID>;
         using LargeReader = Reader<LargeNodeID, LargeDestID, WeightT_, invert>;
 
-        LargeReader r(cli_.graph_filename());
+        LargeReader r(graph_filename_);
         auto result = r.ReadFile();
 
         // ratio: if matrix market format is used, the format can specify whether the graph is symmetric
@@ -516,7 +536,7 @@ private:
         }
 
       } else {
-        ReaderT r(cli_.graph_filename());
+        ReaderT r(graph_filename_);
         auto result = r.ReadFile();
 
         el = std::move(result.el);
@@ -539,8 +559,8 @@ private:
 
     {
       EdgeList el;
-      Generator<NodeID_, DestID_> gen(cli_.synthetic_scale(), cli_.synthetic_scale());
-      el = gen.GenerateEL(cli_.graph_generator() == GraphGenerator::UNIFORM);
+      Generator<NodeID_, DestID_> gen(synthetic_scale_, synthetic_degree_);
+      el = gen.GenerateEL(graph_gen_ == GraphGenerator::UNIFORM);
       g = MakeGraphFromEL(el);
     }
 
