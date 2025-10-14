@@ -21,8 +21,10 @@ enum class GraphGenerator : int {
 
 enum class WeightGenerator : int {
   NO_GEN,
-  UNIFORM,
-  NORMAL,
+  U_GAP_LEGACY,
+  U_GAP,
+  U_GRAPH_500,
+  N_GRAPH_BASED,
 };
 
 enum OutputFormat : int {
@@ -39,8 +41,10 @@ private:
   };
 
   std::map<std::string, WeightGenerator> weight_map_{
-      {"normal", WeightGenerator::NORMAL},
-      {"uniform", WeightGenerator::UNIFORM}
+      {"gap-legacy", WeightGenerator::U_GAP_LEGACY},
+      {"gap", WeightGenerator::U_GAP},
+      {"graph500", WeightGenerator::U_GRAPH_500},
+      {"normal-gb", WeightGenerator::N_GRAPH_BASED}
   };
 
   void print_options(const std::vector<CLI::Option*>& options) {
