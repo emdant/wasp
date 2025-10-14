@@ -18,30 +18,16 @@
 #include "timer.h"
 #include "util.h"
 
-/*
-GAP Benchmark Suite
-Class:  Generator
-Author: Scott Beamer
-
-Given scale and degree, generates edgelist for synthetic graph
- - Intended to be called from Builder
- - GenerateEL(uniform) generates and returns the edgelist
- - Can generate uniform random (uniform=true) or R-MAT graph according
-   to Graph500 parameters (uniform=false)
- - Can also randomize weights within a weighted edgelist (InsertWeights)
- - Blocking/reseeding is for parallelism with deterministic output edgelist
-*/
-
 namespace graph_utils {
 
 namespace detail {
 
 template <typename ValueT>
 class RNG {
-  using uValueT = std::make_unsigned_t<ValueT>;
+  using UValueT = std::make_unsigned_t<ValueT>;
 
 public:
-  using type = std::conditional_t<std::numeric_limits<uValueT>::digits == 32, std::mt19937, std::mt19937_64>;
+  using type = std::conditional_t<std::numeric_limits<UValueT>::digits == 32, std::mt19937, std::mt19937_64>;
 };
 
 template <typename T>
@@ -59,7 +45,61 @@ auto generate(RngT& rng, DistT& dist, bool positive) {
   }
 };
 
+template <typename IntegerT>
+class GAPLegacyUniformDistribution {
+  using UIntegerT = std::make_unsigned_t<IntegerT>;
+
+public:
+  // The GAP uniform distribution used a Mersenne-Twister RNG se we hardcode that for the constructor
+  GAPLegacyUniformDistribution(IntegerT max_value) {
+    no_mod_ = RNG_t<IntegerT>::max() == static_cast<UIntegerT>(max_value);
+    mod_ = max_value + 1;
+    UIntegerT remainder_sub_1 = RNG_t<IntegerT>::max() % mod_;
+    if (remainder_sub_1 == mod_ - 1)
+      cutoff_ = 0;
+    else
+      cutoff_ = RNG_t<IntegerT>::max() - remainder_sub_1;
+  }
+
+  template <typename RngT>
+  IntegerT operator()(RngT& rng) {
+    UIntegerT rand_num = rng();
+    if (no_mod_)
+      return rand_num;
+    if (cutoff_ != 0) {
+      while (rand_num >= cutoff_)
+        rand_num = rng();
+    }
+    return rand_num % mod_;
+  }
+
+private:
+  bool no_mod_;
+  UIntegerT mod_;
+  UIntegerT cutoff_;
+};
+
 } // namespace detail
+
+template <typename WeightT>
+struct GAPLegacyDistribution : public detail::GAPLegacyUniformDistribution<WeightT> {
+  GAPLegacyDistribution() : detail::GAPLegacyUniformDistribution<WeightT>(254) {}
+};
+
+template <typename WeightT>
+struct GAPDistribution : public std::uniform_int_distribution<WeightT> {
+  GAPDistribution() : std::uniform_int_distribution<WeightT>(1, 255) {}
+};
+
+template <typename WeightT>
+struct Graph500Distribution : public std::uniform_real_distribution<WeightT> {
+  Graph500Distribution() : std::uniform_real_distribution<WeightT>(0, 1) {}
+};
+
+template <typename WeightT>
+struct GraphBasedNormalDistribution : public std::normal_distribution<WeightT> {
+  GraphBasedNormalDistribution(std::size_t n, std::size_t m) : std::normal_distribution<WeightT>(1.0, std::sqrt(static_cast<double>(n) / m)) {}
+};
 
 template <typename NodeID_, typename WeightT_, typename DistT>
 void replace_weights(CSRGraph<NodeID_, NodeWeight<NodeID_, WeightT_>>& g, DistT& dist, bool positive) {
@@ -111,6 +151,7 @@ void replace_weights(parallel::vector<EdgePair<NodeID_, NodeWeight<NodeID_, Weig
 
 } // namespace graph_utils
 
+// TODO: remove and use GAPLegacyUniformDistribution
 // maps to range [0,max_value], tailored to std::mt19937
 template <typename NodeID_, typename rng_t_, typename uNodeID_ = typename std::make_unsigned<NodeID_>::type>
 class UniDist {
@@ -143,6 +184,19 @@ private:
   uNodeID_ cutoff_;
 };
 
+/*
+GAP Benchmark Suite
+Class:  Generator
+Author: Scott Beamer
+
+Given scale and degree, generates edgelist for synthetic graph
+ - Intended to be called from Builder
+ - GenerateEL(uniform) generates and returns the edgelist
+ - Can generate uniform random (uniform=true) or R-MAT graph according
+   to Graph500 parameters (uniform=false)
+ - Can also randomize weights within a weighted edgelist (InsertWeights)
+ - Blocking/reseeding is for parallelism with deterministic output edgelist
+*/
 template <
     typename NodeID_,
     typename DestID_ = NodeID_,
@@ -244,67 +298,6 @@ public:
     t.Stop();
     PrintTime("Generate Time", t.Seconds());
     return el;
-  }
-
-  // Overwrites existing weights with random from [1,255]
-  static void InsertUniformWeightsGAP(parallel::vector<WEdge>& el) {
-#pragma omp parallel
-    {
-      rng_t_ rng;
-      UniDist<NodeID_, rng_t_> udist(254, rng);
-      int64_t el_size = el.size();
-#pragma omp for
-      for (int64_t block = 0; block < el_size; block += block_size) {
-        rng.seed(kRandSeed + block / block_size);
-        for (int64_t e = block; e < std::min(block + block_size, el_size); e++) {
-          el[e].v.w = static_cast<WeightT_>(udist() + 1);
-        }
-      }
-    }
-  }
-
-  // Populates the edge weights with uniformly distributed weights in the interval [begin, end)
-  static void InsertUniformWeights(parallel::vector<WEdge>& el, WeightT_ begin, WeightT_ end) {
-    using uniform_dist = std::conditional_t<std::is_floating_point_v<WeightT_>, std::uniform_real_distribution<WeightT_>, std::uniform_int_distribution<WeightT_>>;
-#pragma omp parallel
-    {
-      rng_t_ rng;
-      if constexpr (std::is_integral_v<WeightT_>) {
-        end--; // normally, std::uniform_int_distribution<WeightT_> generates values into [begin, end], we want [begin, end)
-      }
-      uniform_dist udist(begin, end);
-      int64_t el_size = el.size();
-#pragma omp for
-      for (int64_t block = 0; block < el_size; block += block_size) {
-        rng.seed(kRandSeed + block / block_size);
-        for (int64_t e = block; e < std::min(block + block_size, el_size); e++) {
-          el[e].v.w = static_cast<WeightT_>(udist(rng));
-        }
-      }
-    }
-  }
-
-  // Weights are generated with a normal distribution with mean 1.0 and stddev sqrt(V/E)
-  static void InsertNormalWeights(parallel::vector<WEdge>& el, int32_t num_nodes, int64_t num_edges) {
-#pragma omp parallel
-    {
-      rng_t_ rng;
-      std::normal_distribution<WeightT_> ndist(
-          static_cast<WeightT_>(1.0),
-          static_cast<WeightT_>(std::sqrt(static_cast<double>(num_nodes) / num_edges))
-      );
-      int64_t el_size = el.size();
-#pragma omp for
-      for (int64_t block = 0; block < el_size; block += block_size) {
-        rng.seed(kRandSeed + block / block_size);
-        for (int64_t e = block; e < std::min(block + block_size, el_size); e++) {
-          WeightT_ weight;
-          while ((weight = static_cast<WeightT_>(ndist(rng))) <= 0)
-            ;
-          el[e].v.w = weight;
-        }
-      }
-    }
   }
 
 private:

@@ -6,12 +6,12 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <iterator>
-#include <random>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -50,6 +50,7 @@ class BuilderBase {
   bool needs_weights_ = false;
   bool relabel_vertices_ = false;
   int64_t num_nodes_ = -1;
+  int64_t num_edges_ = -1;
 
   std::string graph_filename_ = "";
   std::string weights_filename_ = "";
@@ -453,6 +454,7 @@ private:
       std::cout << "Finding Max Node ID" << std::endl;
       num_nodes_ = FindMaxNodeID(el) + 1;
     }
+    num_edges_ = el.size();
 
     if constexpr (WEIGHTED_BUILDER) {
       if (needs_weights_ || generate_weights_) {
@@ -473,45 +475,56 @@ private:
 
   template <typename ReprT>
   void generateWeights(ReprT& edge_repr) {
-    switch (weight_dist_) {
+    if constexpr (std::is_integral_v<WeightT_>) {
+      switch (weight_dist_) {
 
-    case WeightGenerator::UNIFORM: {
-      using udist = std::conditional_t<std::is_floating_point_v<WeightT_>, std::uniform_real_distribution<WeightT_>, std::uniform_int_distribution<WeightT_>>;
-      std::cout << "Generating uniformly distributed weight within range ";
-      std::cout << "[" << dist_params_.first << ", " << dist_params_.second << ")" << std::endl;
-      udist dist(
-          static_cast<WeightT_>(dist_params_.first),
-          static_cast<WeightT_>(dist_params_.second)
-      );
-      graph_utils::replace_weights(edge_repr, dist, true);
-      break;
-    }
-
-    case WeightGenerator::NORMAL: {
-      if constexpr (!std::is_floating_point_v<WeightT_>) {
-        std::cout << "Normal distribution not supported for integer weights" << std::endl;
-        std::exit(-1);
-      } else {
-        std::cout << "Generating normally distributed weights with";
-        std::cout << "mean=" << dist_params_.first << ", stddev=" << dist_params_.second << std::endl;
-        std::normal_distribution<WeightT_> ndist(
-            static_cast<WeightT_>(dist_params_.first),
-            static_cast<WeightT_>(dist_params_.second)
-        );
-        graph_utils::replace_weights(edge_repr, ndist, true);
+      case WeightGenerator::U_GAP_LEGACY: {
+        std::cout << "Generating uniformly distributed weight in set {1, 255}" << std::endl;
+        graph_utils::GAPLegacyDistribution<WeightT_> dist;
+        graph_utils::replace_weights(edge_repr, dist, true);
         break;
       }
-    }
 
-    default:
-      std::cout << "Weight generator not suppported" << std::endl;
-      std::exit(-1);
+      case WeightGenerator::U_GAP: {
+        std::cout << "Generating uniformly distributed weight in set {1, 255}" << std::endl;
+        graph_utils::GAPDistribution<WeightT_> dist;
+        graph_utils::replace_weights(edge_repr, dist, true);
+        break;
+      }
+
+      default:
+        std::cout << "Weight generator not supported for type " << typeid(WeightT_).name() << std::endl;
+        std::exit(-1);
+      }
+    } else {
+      switch (weight_dist_) {
+
+      case WeightGenerator::U_GRAPH_500: {
+        std::cout << "Generating uniformly distributed weight in interval [0,1)" << std::endl;
+        graph_utils::Graph500Distribution<WeightT_> dist;
+        graph_utils::replace_weights(edge_repr, dist, true);
+        break;
+      }
+
+      case WeightGenerator::N_GRAPH_BASED: {
+        std::cout << "Generating normally distibuted weights with mean=1.0 and stddev=sqrt(n/m)" << std::endl;
+        graph_utils::GraphBasedNormalDistribution<WeightT_> dist(static_cast<std::size_t>(num_nodes_), static_cast<std::size_t>(num_edges_));
+        graph_utils::replace_weights(edge_repr, dist, true);
+        break;
+      }
+
+      default:
+        std::cout << "Weight generator not supported for type " << typeid(WeightT_).name() << std::endl;
+        std::exit(-1);
+      }
     }
   }
 
   CSRGraph<NodeID_, DestID_, invert> readSerialized() {
     ReaderT r(graph_filename_);
     auto g = r.ReadSerializedGraph();
+    num_nodes_ = g.num_nodes();
+    num_edges_ = g.num_edges();
 
     if constexpr (WEIGHTED_BUILDER) {
       if (weights_filename_ != "") {
