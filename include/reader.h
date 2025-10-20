@@ -6,12 +6,17 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
+#include <fcntl.h>
 #include <fstream>
 #include <iosfwd>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <type_traits>
+#include <unistd.h>
 #include <vector>
 
 #include "graph.h"
@@ -362,11 +367,28 @@ public:
       std::exit(-5);
     }
 
-    std::ifstream file(filename_);
-    if (!file.is_open()) {
-      std::cout << "Couldn't open file " << filename_ << std::endl;
-      std::exit(-6);
+    int fd = open(filename_.c_str(), O_RDONLY);
+    if (fd == -1) {
+      std::perror("Error opening file");
+      std::exit(-1);
     }
+
+    struct stat sb;
+    if (fstat(fd, &sb) == -1) {
+      std::perror("Error getting file size");
+      close(fd);
+      std::exit(-1);
+    }
+    size_t file_size = sb.st_size;
+
+    char* file_ptr = static_cast<char*>(mmap(NULL, file_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0));
+    if (file_ptr == MAP_FAILED) {
+      std::perror("Error mapping file");
+      close(fd);
+      std::exit(-1);
+    }
+    close(fd);
+    char* current_ptr = file_ptr;
 
     Timer t;
     t.Start();
@@ -375,40 +397,64 @@ public:
     SGOffset num_nodes, num_edges;
     DestID_ **index = nullptr, **inv_index = nullptr;
     DestID_ *neighs = nullptr, *inv_neighs = nullptr;
-    file.read(reinterpret_cast<char*>(&directed), sizeof(bool));
-    file.read(reinterpret_cast<char*>(&num_edges), sizeof(SGOffset));
-    file.read(reinterpret_cast<char*>(&num_nodes), sizeof(SGOffset));
 
-    parallel::vector<SGOffset> offsets(num_nodes + 1);
+    directed = *(reinterpret_cast<bool*>(current_ptr));
+    current_ptr += sizeof(bool);
+    num_edges = *(reinterpret_cast<SGOffset*>(current_ptr));
+    current_ptr += sizeof(SGOffset);
+    num_nodes = *(reinterpret_cast<SGOffset*>(current_ptr));
+    current_ptr += sizeof(SGOffset);
+
+    size_t num_offsets = num_nodes + 1;
+    parallel::vector<SGOffset> offsets(num_offsets);
+    size_t num_offset_bytes = num_offsets * sizeof(SGOffset);
+    memcpy(offsets.data(), current_ptr, num_offset_bytes);
+    current_ptr += num_offset_bytes;
+
     neighs = new DestID_[num_edges];
-    std::streamsize num_index_bytes = (num_nodes + 1) * sizeof(SGOffset);
-    std::streamsize num_neigh_bytes = num_edges * sizeof(DestID_);
-    file.read(reinterpret_cast<char*>(offsets.data()), num_index_bytes);
-    if (!(WEIGHTED_READER != weighted)) { // weighted reader and weighted graph or unweighted reader and unweighted graph
-      file.read(reinterpret_cast<char*>(neighs), num_neigh_bytes);
-    } else { // unweighted reader and weighted graph, the opposite is not possible (exited early)
-      for (SGOffset i = 0; i < num_edges; i++) {
-        file.read(reinterpret_cast<char*>(neighs + i), sizeof(NodeID_));
-        file.ignore(sizeof(WeightT_)); // will be 32-bit anyway
-      }
-    }
 
+    if (!(WEIGHTED_READER != weighted)) { // weighted reader and weighted graph or unweighted reader and unweighted graph
+      std::streamsize num_neigh_bytes = num_edges * sizeof(DestID_);
+      memcpy(neighs, current_ptr, num_neigh_bytes);
+      current_ptr += num_neigh_bytes;
+    } else { // unweighted reader and weighted graph, the opposite is not possible (exited early)
+      struct WEdge {
+        NodeID_ destination;
+        WeightT_ weight;
+      };
+      const WEdge* edge_data = reinterpret_cast<const WEdge*>(current_ptr);
+      for (SGOffset i = 0; i < num_edges; ++i) {
+        neighs[i] = static_cast<DestID_>(edge_data[i].destination);
+      }
+      current_ptr += num_edges * sizeof(WEdge);
+    }
     index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, neighs);
+
     if (directed && invert) {
+      memcpy(offsets.data(), current_ptr, num_offset_bytes);
+      current_ptr += num_offset_bytes;
+
       inv_neighs = new DestID_[num_edges];
-      file.read(reinterpret_cast<char*>(offsets.data()), num_index_bytes);
+
       if (!(WEIGHTED_READER != weighted)) { // weighted reader and weighted graph or unweighted reader and unweighted graph
-        file.read(reinterpret_cast<char*>(inv_neighs), num_neigh_bytes);
+        std::streamsize num_neigh_bytes = num_edges * sizeof(DestID_);
+        memcpy(inv_neighs, current_ptr, num_neigh_bytes);
+        current_ptr += num_neigh_bytes;
       } else { // unweighted reader and weighted graph, the opposite is not possible (exited early)
-        for (SGOffset i = 0; i < num_edges; i++) {
-          file.read(reinterpret_cast<char*>(inv_neighs + i), sizeof(NodeID_));
-          file.ignore(sizeof(WeightT_)); // will be 32-bit anyway
+        struct WeightedEdge {
+          NodeID_ destination;
+          WeightT_ weight;
+        };
+        const WeightedEdge* edge_data = reinterpret_cast<const WeightedEdge*>(current_ptr);
+        for (SGOffset i = 0; i < num_edges; ++i) {
+          inv_neighs[i] = static_cast<DestID_>(edge_data[i].destination);
         }
+        current_ptr += num_edges * sizeof(WeightedEdge);
       }
 
       inv_index = CSRGraph<NodeID_, DestID_>::GenIndex(offsets, inv_neighs);
     }
-    file.close();
+    munmap(file_ptr, file_size);
     t.Stop();
 
     PrintTime("Read Time", t.Seconds());

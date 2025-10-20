@@ -528,6 +528,7 @@ private:
 
     if constexpr (WEIGHTED_BUILDER) {
       if (weights_filename_ != "") {
+        std::cout << "Replacing weights" << std::endl;
         VectorReader<typename DestID_::WeightT> wreader(weights_filename_);
         g.ReplaceWeights(wreader.ReadSerialized());
       }
