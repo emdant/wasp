@@ -24,6 +24,7 @@ enum class WeightGenerator : int {
   U_GAP_LEGACY,
   U_GAP,
   U_GRAPH_500,
+  U_JULIENNE,
   N_GRAPH_BASED,
 };
 
@@ -44,7 +45,8 @@ private:
       {"gap-legacy", WeightGenerator::U_GAP_LEGACY},
       {"gap", WeightGenerator::U_GAP},
       {"graph500", WeightGenerator::U_GRAPH_500},
-      {"normal-gb", WeightGenerator::N_GRAPH_BASED}
+      {"julienne", WeightGenerator::U_JULIENNE},
+      {"normal-gb", WeightGenerator::N_GRAPH_BASED},
   };
 
   void print_options(const std::vector<CLI::Option*>& options) {

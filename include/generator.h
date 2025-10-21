@@ -97,6 +97,11 @@ struct Graph500Distribution : public std::uniform_real_distribution<WeightT> {
 };
 
 template <typename WeightT>
+struct JulienneDistribution : public std::uniform_real_distribution<WeightT> {
+  JulienneDistribution(std::size_t n) : std::uniform_real_distribution<WeightT>(1, std::log2(n)) {}
+};
+
+template <typename WeightT>
 struct GraphBasedNormalDistribution : public std::normal_distribution<WeightT> {
   GraphBasedNormalDistribution(std::size_t n, std::size_t m) : std::normal_distribution<WeightT>(1.0, std::sqrt(static_cast<double>(n) / m)) {}
 };

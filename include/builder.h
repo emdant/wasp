@@ -499,6 +499,13 @@ private:
     } else {
       switch (weight_dist_) {
 
+      case WeightGenerator::U_JULIENNE: {
+        std::cout << "Generating uniformly distributed weight in interval [0,logn)" << std::endl;
+        graph_utils::JulienneDistribution<WeightT_> dist(static_cast<std::size_t>(num_nodes_));
+        graph_utils::replace_weights(edge_repr, dist, true);
+        break;
+      }
+
       case WeightGenerator::U_GRAPH_500: {
         std::cout << "Generating uniformly distributed weight in interval [0,1)" << std::endl;
         graph_utils::Graph500Distribution<WeightT_> dist;
