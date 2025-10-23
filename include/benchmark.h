@@ -65,7 +65,7 @@ public:
         udist_(g.num_nodes() - 1, rng_) {
     if (filename != "") {
       VectorReader<NodeID> reader(filename);
-      file_sources_ = reader.Read();
+      file_sources_ = reader.Read("Sources");
     }
   }
 

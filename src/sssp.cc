@@ -228,9 +228,9 @@ int main(int argc, char* argv[]) {
 
   WeightedBuilder b(cli);
   WGraph graph = b.MakeGraph();
-  graph.PrintStats();
-
   SourcePicker sp(graph, cli.sources_filename(), cli.start_vertex());
+
+  graph.PrintStats();
 
   for (auto i = 0; i < cli.num_sources(); i++) {
     auto source = sp.PickNext();

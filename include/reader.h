@@ -478,7 +478,7 @@ public:
     }
   }
 
-  std::vector<ValueT_> Read() {
+  std::vector<ValueT_> Read(const std::string& values_name) {
     std::ifstream file(filename_, std::ios::binary);
     if (!file.is_open()) {
       std::cout << "Couldn't open file " << filename_ << std::endl;
@@ -496,12 +496,13 @@ public:
     file.close();
 
     t.Stop();
-    PrintTime("Values Read Time", t.Seconds());
+
+    PrintTime(values_name + " Read Time", t.Seconds());
 
     return sources;
   }
 
-  std::vector<ValueT_> ReadSerialized() {
+  std::vector<ValueT_> ReadSerialized(const std::string& values_name) {
     std::ifstream file(filename_, std::ios::binary);
     if (!file.is_open()) {
       std::cout << "Couldn't open file " << filename_ << std::endl;
@@ -519,7 +520,7 @@ public:
     file.close();
 
     t.Stop();
-    PrintTime("Serialized Values Read Time", t.Seconds());
+    PrintTime(values_name + " Read Time", t.Seconds());
 
     return values;
   }
