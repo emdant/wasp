@@ -79,6 +79,7 @@ public:
     if constexpr (WEIGHTED_BUILDER) {
       weight_dist_ = cli.weight_distribution();
       dist_params_ = cli.distribution_params();
+      weights_filename_ = cli.weights_filename();
       generate_weights_ = weight_dist_ != WeightGenerator::NO_GEN;
       needs_weights_ = WEIGHTED_BUILDER;
     }
@@ -537,7 +538,7 @@ private:
       if (weights_filename_ != "") {
         std::cout << "Replacing weights" << std::endl;
         VectorReader<typename DestID_::WeightT> wreader(weights_filename_);
-        g.ReplaceWeights(wreader.ReadSerialized());
+        g.ReplaceWeights(wreader.ReadSerialized("Weights"));
       }
 
       if (generate_weights_) {
